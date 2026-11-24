@@ -966,3 +966,7 @@ accessible field net/minecraft/world/entity/ConversionTracker conversionTime I
 accessible class net/minecraft/core/component/Removed
 
 accessible field net/minecraft/world/level/block/entity/SignBlockEntity allowOpFeatures Z
+
+accessible method net/minecraft/world/entity/player/Player canCriticalAttack (Lnet/minecraft/world/entity/Entity;)Z
+accessible field net/minecraft/world/entity/ConversionTracker afflictionTime I
+accessible method net/minecraft/world/entity/ConversionTracker setConverting (Z)V
