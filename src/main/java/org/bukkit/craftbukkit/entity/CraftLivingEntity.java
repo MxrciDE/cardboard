@@ -535,12 +535,10 @@ public class CraftLivingEntity extends CraftEntity implements LivingEntity {
         entity.setSwimming(arg0);
     }
 
-    @Override
     public boolean isPersistenceRequired() {
         return this.getHandle() instanceof net.minecraft.world.entity.Mob mob && mob.isPersistenceRequired();
     }
 
-    @Override
     public void setPersistenceRequired(boolean persistent) {
         if (this.getHandle() instanceof net.minecraft.world.entity.Mob mob) {
             mob.persistenceRequired = persistent;
