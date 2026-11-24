@@ -13,13 +13,13 @@ import org.bukkit.material.MaterialData;
 
 public class CraftEnderman extends CraftMonster implements Enderman {
 
-    public CraftEnderman(CraftServer server, Enderman entity) {
+    public CraftEnderman(CraftServer server, net.minecraft.world.entity.monster.Enderman entity) {
         super(server, entity);
     }
 
     @Override
-    public Enderman getHandle() {
-        return (Enderman) this.entity;
+    public net.minecraft.world.entity.monster.Enderman getHandle() {
+        return (net.minecraft.world.entity.monster.Enderman) this.entity;
     }
 
     @Override
