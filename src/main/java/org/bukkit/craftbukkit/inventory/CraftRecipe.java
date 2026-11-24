@@ -18,6 +18,21 @@ import org.jetbrains.annotations.NotNull;
 
 public interface CraftRecipe extends Recipe {
 
+    static CraftRecipe fromBukkitRecipe(Recipe recipe) {
+        if (recipe instanceof CraftRecipe craftRecipe) return craftRecipe;
+        if (recipe instanceof org.bukkit.inventory.ShapedRecipe shaped) return CraftShapedRecipe.fromBukkitRecipe(shaped);
+        if (recipe instanceof org.bukkit.inventory.ShapelessRecipe shapeless) return CraftShapelessRecipe.fromBukkitRecipe(shapeless);
+        if (recipe instanceof org.bukkit.inventory.FurnaceRecipe furnace) return CraftFurnaceRecipe.fromBukkitRecipe(furnace);
+        if (recipe instanceof org.bukkit.inventory.BlastingRecipe blasting) return CraftBlastingRecipe.fromBukkitRecipe(blasting);
+        if (recipe instanceof org.bukkit.inventory.CampfireRecipe campfire) return CraftCampfireRecipe.fromBukkitRecipe(campfire);
+        if (recipe instanceof org.bukkit.inventory.SmokingRecipe smoking) return CraftSmokingRecipe.fromBukkitRecipe(smoking);
+        if (recipe instanceof org.bukkit.inventory.StonecuttingRecipe stonecutting) return CraftStonecuttingRecipe.fromBukkitRecipe(stonecutting);
+        if (recipe instanceof org.bukkit.inventory.SmithingTransformRecipe smithing) return CraftSmithingTransformRecipe.fromBukkitRecipe(smithing);
+        if (recipe instanceof org.bukkit.inventory.SmithingTrimRecipe smithingTrim) return CraftSmithingTrimRecipe.fromBukkitRecipe(smithingTrim);
+        if (recipe instanceof org.bukkit.inventory.TransmuteRecipe transmute) return CraftTransmuteRecipe.fromBukkitRecipe(transmute);
+        return null;
+    }
+
     void addToCraftingManager();
 
     default Optional<Ingredient> toNMSOptional(RecipeChoice bukkit, boolean requireNotEmpty) {
