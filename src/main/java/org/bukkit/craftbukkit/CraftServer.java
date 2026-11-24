@@ -1679,6 +1679,16 @@ public class CraftServer extends CardboardAbstractServer implements Server {
     }
 
     @Override
+    public boolean removeRecipes(Iterable<NamespacedKey> recipeKeys) {
+        Preconditions.checkArgument(recipeKeys != null, "recipeKeys cannot be null");
+        boolean removed = false;
+        for (NamespacedKey key : recipeKeys) {
+            removed |= this.removeRecipe(key);
+        }
+        return removed;
+    }
+
+    @Override
     public void resetRecipes() {
         reloadData();
     }
