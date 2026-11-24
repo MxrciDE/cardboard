@@ -2734,11 +2734,11 @@ public class CraftWorld extends CraftRegionAccessor implements World {
 		 */
 		biomeSource = gen.getBiomeSource();
 
-		final Climate.Sampler sampler = serverCache.randomState().sampler();
+		
 		final List<Biome> possibleBiomes = biomeSource.possibleBiomes().stream().map(CraftBiome::minecraftHolderToBukkit).toList();
 		return new BiomeProvider() {
 			public Biome getBiome(WorldInfo worldInfo, int x, int y, int z) {
-				return CraftBiome.minecraftHolderToBukkit(biomeSource.getNoiseBiome(x >> 2, y >> 2, z >> 2, sampler));
+				return CraftBiome.minecraftHolderToBukkit(this.getHandle().getBiome(new BlockPos(x, y, z)));
 			}
 
 			public List<Biome> getBiomes(WorldInfo worldInfo) {
@@ -2867,7 +2867,7 @@ public class CraftWorld extends CraftRegionAccessor implements World {
         				CraftNamespacedKey.toMinecraft(structure.getStructureType().getKey())
         		).orElseThrow().value();
 
-        return this.getHandle().structureManager().getStructureWithPieceAt(MCUtil_toBlockPos(position), stru).isValid();
+        return this.getHandle().structureManager().getStructureWithPieceAt(position.blockX(), position.blockY(), position.blockZ(), stru).isValid();
 
 	}
 	
@@ -2918,8 +2918,8 @@ public class CraftWorld extends CraftRegionAccessor implements World {
             holders.add(CraftBiome.bukkitToMinecraftHolder(biome));
         }
 
-        Climate.Sampler sampler = this.getHandle().getChunkSource().randomState().sampler();
-        Pair<BlockPos, Holder<net.minecraft.world.level.biome.Biome>> found = this.getHandle().getChunkSource().getGenerator().getBiomeSource().findClosestBiome3d(originPos, radius, horizontalInterval, verticalInterval, holders::contains, sampler, this.getHandle());
+        net.minecraft.world.level.levelgen.RandomState randomState = this.getHandle().getChunkSource().randomState();
+        Pair<BlockPos, Holder<net.minecraft.world.level.biome.Biome>> found = this.getHandle().getChunkSource().getGenerator().getBiomeSource().findClosestBiome3d(originPos, radius, horizontalInterval, verticalInterval, holders::contains, randomState, this.getHandle());
         if (found == null) {
             return null;
         }
@@ -3014,7 +3014,7 @@ public class CraftWorld extends CraftRegionAccessor implements World {
 	
     private List<GeneratedStructure> getStructures(int x, int z, Predicate<net.minecraft.world.level.levelgen.structure.Structure> predicate) {
         List<GeneratedStructure> structures = new ArrayList<>();
-        for (StructureStart start : this.getHandle().structureManager().startsForStructure(new ChunkPos(x, z), predicate)) {
+        for (StructureStart start : this.getHandle().structureManager().startsForStructure(x, z, predicate)) {
             structures.add(new CraftGeneratedStructure(start));
         }
 
