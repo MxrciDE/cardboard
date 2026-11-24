@@ -15,6 +15,7 @@ import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
+import org.bukkit.craftbukkit.CraftServer;
 import org.bukkit.craftbukkit.configuration.ConfigSerializationUtil;
 import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;
@@ -112,7 +113,7 @@ public final class CraftProfileProperty {
 
 	static {
 		try {
-			PUBLIC_KEYS = MinecraftServer.getServer().services().servicesKeySet();
+			PUBLIC_KEYS = CraftServer.INSTANCE.getServer().services().servicesKeySet();
 		} catch (Exception var1) {
 			throw new Error("Could not load yggdrasil_session_pubkey.der! This indicates a bug.");
 		}
