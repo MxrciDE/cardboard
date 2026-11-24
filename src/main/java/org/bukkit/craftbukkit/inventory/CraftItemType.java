@@ -16,7 +16,12 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStackTemplate;
 import net.minecraft.world.item.component.ItemAttributeModifiers;
 import net.minecraft.world.level.block.ComposterBlock;
-import net.minecraft.world.level.block.entity.FuelValues;
+import net.minecraft.world.item.component.CookingFuel;
+import net.minecraft.world.level.storage.loot.LootContext;
+import net.minecraft.world.level.storage.loot.LootParams;
+import net.minecraft.world.level.storage.loot.parameters.LootContextParamSets;
+import net.minecraft.world.level.storage.loot.providers.number.ints.ContextIntProvider;
+import net.minecraft.world.level.storage.loot.providers.number.ints.ResolvableInt;
 import org.bukkit.Material;
 import org.bukkit.Registry;
 import org.bukkit.World;
@@ -155,19 +160,27 @@ public class CraftItemType<M extends ItemMeta> extends HolderableBase<Item> impl
 
     @Override
     public boolean isFuel() {
-        return CraftServer.INSTANCE.getServer().fuelValues().isFuel(new net.minecraft.world.item.ItemStack(this.getHandle()));
+        return this.getHandle().components().has(DataComponents.COOKING_FUEL);
     }
 
     @Override
     public int getBurnDuration() {
-        FuelValues fuelValues = CraftServer.INSTANCE.getServer().fuelValues();
-        net.minecraft.world.item.ItemStack stack = new net.minecraft.world.item.ItemStack(this.getHandle());
-
-        if (!fuelValues.isFuel(stack)) {
+        CookingFuel cookingFuel = this.getHandle().components().get(DataComponents.COOKING_FUEL);
+        if (cookingFuel == null) {
             return 0;
         }
 
-        return fuelValues.burnDuration(stack);
+        if (cookingFuel.burnTime() instanceof ResolvableInt.Reference burnTime) {
+            if (MinecraftServer.getServer() == null) {
+                throw new IllegalArgumentException("Too early to call this method");
+            }
+            Holder.Reference<ContextIntProvider> provider = MinecraftServer.getServer().reloadableRegistries().lookup().getOrThrow(burnTime.key());
+            LootContext fakeContext = new LootContext.Builder(new LootParams.Builder(null).create(LootContextParamSets.EMPTY))
+                .withOptionalRandomSeed(42L)
+                .createWithoutLevel();
+            return provider.value().getInt(fakeContext);
+        }
+        return 0;
     }
 
     @Override
