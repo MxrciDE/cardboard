@@ -23,13 +23,13 @@ public class CraftSkeleton extends CraftAbstractSkeleton implements Skeleton {
     @Override
     public int getConversionTime() {
         Preconditions.checkState(this.isConverting(), "Entity is not converting");
-        return this.getHandle().conversionTime;
+        return this.getHandle().freezingTracker.conversionTime;
     }
 
     @Override
     public void setConversionTime(int time) {
         if (time < 0) {
-            this.getHandle().conversionTime = -1;
+            this.getHandle().freezingTracker.setConversionTime(-1);
             this.getHandle().getEntityData().set(net.minecraft.world.entity.monster.skeleton.Skeleton.DATA_STRAY_CONVERSION_ID, false);
         } else {
             this.getHandle().startFreezeConversion(time);
