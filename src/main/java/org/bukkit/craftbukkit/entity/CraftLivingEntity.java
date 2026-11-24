@@ -535,14 +535,20 @@ public class CraftLivingEntity extends CraftEntity implements LivingEntity {
         entity.setSwimming(arg0);
     }
 
+    private net.minecraft.world.item.component.SwingAnimation getSwingAnimation(InteractionHand hand) {
+        net.minecraft.world.item.component.SwingAnimation animation = this.getHandle().getItemInHand(hand)
+            .get(net.minecraft.core.component.DataComponents.ATTACK_ANIMATION);
+        return animation != null ? animation : net.minecraft.world.item.component.SwingAnimation.DEFAULT;
+    }
+
     @Override
     public void swingMainHand() {
-        this.getHandle().swing(InteractionHand.MAIN_HAND);
+        this.getHandle().swing(InteractionHand.MAIN_HAND, getSwingAnimation(InteractionHand.MAIN_HAND), true);
     }
 
     @Override
     public void swingOffHand() {
-        this.getHandle().swing(InteractionHand.OFF_HAND);
+        this.getHandle().swing(InteractionHand.OFF_HAND, getSwingAnimation(InteractionHand.OFF_HAND), true);
     }
 
     @Override
