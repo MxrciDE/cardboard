@@ -785,7 +785,7 @@ class CraftMetaItem implements ItemMeta, Damageable, Repairable, BlockDataMeta {
 
                 for (Entry<DataComponentType<?>, Object> entry : unhandledPatch.map.entrySet()) {
                     // Move removed unhandled tags to dedicated removedTags
-                    if (entry.getValue().isEmpty()) {
+                    if (Removed.isRemoved(entry.getValue())) {
                         DataComponentType<?> key = entry.getKey();
 
                         ((DataComponentPatch_BuilderBridge)this.unhandledTags).clear(key);
@@ -1048,9 +1048,9 @@ class CraftMetaItem implements ItemMeta, Damageable, Repairable, BlockDataMeta {
         }
 
         for (Map.Entry<DataComponentType<?>, Object> e : this.unhandledTags.build().map.entrySet()) {
-            e.getValue().ifPresent((value) -> {
-                tag.builder.set((DataComponentType) e.getKey(), value);
-            });
+            if (Removed.isNotRemoved(e.getValue())) {
+                tag.builder.set((DataComponentType) e.getKey(), e.getValue());
+            }
         }
 
         for (DataComponentType<?> removed : this.removedTags) {
@@ -1860,11 +1860,11 @@ class CraftMetaItem implements ItemMeta, Damageable, Repairable, BlockDataMeta {
         StringJoiner componentString = new StringJoiner(",", "[", "]");
         for (Entry<DataComponentType<?>, Object> entry : patch.map.entrySet()) {
             DataComponentType<?> componentType = entry.getKey();
-            Optional<?> componentValue = entry.getValue();
+            Object componentValue = entry.getValue();
             String componentKey = componentTypeRegistry.getResourceKey(componentType).orElseThrow().identifier().toString();
 
-            if (componentValue.isPresent()) {
-                net.minecraft.nbt.Tag componentValueAsNBT = (net.minecraft.nbt.Tag) ((DataComponentType) componentType).codecOrThrow().encodeStart(ops, componentValue.get()).getOrThrow();
+            if (Removed.isNotRemoved(componentValue)) {
+                net.minecraft.nbt.Tag componentValueAsNBT = (net.minecraft.nbt.Tag) ((DataComponentType) componentType).codecOrThrow().encodeStart(ops, componentValue).getOrThrow();
                 String componentValueAsNBTString = new SnbtPrinterTagVisitor("", 0, new ArrayList<>()).visit(componentValueAsNBT);
                 componentString.add(componentKey + "=" + componentValueAsNBTString);
             } else {
