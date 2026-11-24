@@ -233,6 +233,12 @@ public class CraftHumanEntity extends CraftLivingEntity implements HumanEntity {
     }
 
     @Override
+    public boolean canCriticalAttack(org.bukkit.entity.Entity entity) {
+        Preconditions.checkArgument(entity != null, "entity cannot be null");
+        return this.getHandle().canCriticalAttack(((CraftEntity) entity).getHandle());
+    }
+
+    @Override
     public Location getBedLocation() {
         Preconditions.checkState(this.isSleeping(), "Not sleeping");
 
@@ -727,7 +733,7 @@ public class CraftHumanEntity extends CraftLivingEntity implements HumanEntity {
 
     @Override
     public int undiscoverRecipes(Collection<NamespacedKey> recipes) {
-        return this.getHandle().resetRecipes(this.bukkitKeysToMinecraftRecipes(recipes));
+        return ((net.minecraft.server.level.ServerPlayer) this.getHandle()).resetRecipes(this.bukkitKeysToMinecraftRecipes(recipes));
     }
 
     @Override
