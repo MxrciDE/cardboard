@@ -163,7 +163,6 @@ import net.minecraft.world.level.dimension.BuiltinDimensionTypes;
 import net.minecraft.world.level.dimension.DimensionType;
 import net.minecraft.world.level.gamerules.GameRules;
 import net.minecraft.world.level.levelgen.Heightmap.Types;
-import net.minecraft.world.level.levelgen.feature.ConfiguredFeature;
 import net.minecraft.world.level.levelgen.structure.StructureStart;
 import net.minecraft.world.level.storage.LevelData;
 import net.minecraft.world.level.storage.PrimaryLevelData;
@@ -393,7 +392,6 @@ public class CraftWorld extends CraftRegionAccessor implements World {
 	@Override
 	public boolean generateTree(Location loc, TreeType arg1, BlockChangeDelegate arg2) {
 		BlockPos pos = new BlockPos(loc.getBlockX(), loc.getBlockY(), loc.getBlockZ());
-		ConfiguredFeature gen = null;
         /*switch (arg1) {
             case ACACIA:
                 gen = ConfiguredFeatures.ACACIA;
