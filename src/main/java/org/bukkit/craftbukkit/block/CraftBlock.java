@@ -13,7 +13,7 @@ import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.LevelAccessor;
 import net.minecraft.world.level.LightLayer;
 import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.level.block.RedStoneWireBlock;
+import net.minecraft.world.level.block.RedstoneWireBlock;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
@@ -424,7 +424,7 @@ public class CraftBlock implements Block {
         if (!state.is(Blocks.REDSTONE_WIRE)) {
             return power;
         } else {
-            return Math.max(state.getValue(RedStoneWireBlock.POWER), power);
+            return Math.max(state.getValue(RedstoneWireBlock.POWER), power);
         }
     }
 
