@@ -88,10 +88,6 @@ public final class ItemComponentTypesBridgesImpl implements ItemComponentTypesBr
         return new PaperSuspiciousStewEffects.BuilderImpl();
     }
 
-    @Override
-    public MapItemColor.Builder mapItemColor() {
-        return new PaperMapItemColor.BuilderImpl();
-    }
 
     @Override
     public MapDecorations.Builder mapDecorations() {
