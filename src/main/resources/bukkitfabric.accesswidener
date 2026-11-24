@@ -964,3 +964,5 @@ accessible field net/minecraft/world/entity/monster/skeleton/Skeleton freezingTr
 accessible field net/minecraft/world/entity/monster/zombie/Zombie drowningTracker Lnet/minecraft/world/entity/ConversionTracker;
 accessible field net/minecraft/world/entity/ConversionTracker conversionTime I
 accessible class net/minecraft/core/component/Removed
+
+accessible field net/minecraft/world/level/block/entity/SignBlockEntity allowOpFeatures Z
