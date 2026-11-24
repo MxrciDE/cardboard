@@ -1679,6 +1679,14 @@ public class CraftServer extends CardboardAbstractServer implements Server {
     }
 
     @Override
+    public boolean hasRecipe(NamespacedKey recipeKey) {
+        Preconditions.checkArgument(recipeKey != null, "recipeKey cannot be null");
+        final net.minecraft.resources.ResourceKey<net.minecraft.world.item.crafting.Recipe<?>> id =
+            CraftNamespacedKey.toResourceKey(net.minecraft.core.registries.Registries.RECIPE, recipeKey);
+        return this.getServer().getRecipeManager().byKey(id).isPresent();
+    }
+
+    @Override
     public boolean removeRecipes(Iterable<NamespacedKey> recipeKeys) {
         Preconditions.checkArgument(recipeKeys != null, "recipeKeys cannot be null");
         boolean removed = false;
