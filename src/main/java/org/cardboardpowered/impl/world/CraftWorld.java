@@ -1465,7 +1465,6 @@ public class CraftWorld extends CraftRegionAccessor implements World {
 		this.getHandle().getServer().setDifficulty(mc, true);
 	}
 
-	@Override
     @Override
     public @org.jetbrains.annotations.Nullable io.papermc.paper.world.WorldClock getDefaultClock() {
         return this.world.dimensionType().defaultClock().map(io.papermc.paper.world.PaperWorldClock::minecraftHolderToBukkit).orElse(null);
