@@ -959,3 +959,7 @@ accessible	field	net/minecraft/world/damagesource/CombatTracker	lastDamageTime	I
 accessible	method	net/minecraft/world/entity/monster/cubemob/SulfurCube	setFuse	(I)V
 
 mutable field net/minecraft/server/ServerAdvancementManager advancements Ljava/util/Map;
+
+accessible field net/minecraft/world/entity/monster/skeleton/Skeleton freezingTracker Lnet/minecraft/world/entity/ConversionTracker;
+accessible field net/minecraft/world/entity/monster/zombie/Zombie drowningTracker Lnet/minecraft/world/entity/ConversionTracker;
+accessible field net/minecraft/world/entity/ConversionTracker conversionTime I
