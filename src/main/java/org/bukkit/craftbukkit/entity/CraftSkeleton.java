@@ -17,7 +17,7 @@ public class CraftSkeleton extends CraftAbstractSkeleton implements Skeleton {
 
     @Override
     public boolean isConverting() {
-        return this.getHandle().isFreezeConverting();
+        return this.getHandle().isShaking();
     }
 
     @Override
@@ -29,7 +29,8 @@ public class CraftSkeleton extends CraftAbstractSkeleton implements Skeleton {
     @Override
     public void setConversionTime(int time) {
         if (time < 0) {
-            this.getHandle().freezingTracker.setConversionTime(-1);
+            this.getHandle().freezingTracker.setConverting(false);
+            this.getHandle().freezingTracker.setAfflictionTime(-1);
             this.getHandle().getEntityData().set(net.minecraft.world.entity.monster.skeleton.Skeleton.DATA_STRAY_CONVERSION_ID, false);
         } else {
             this.getHandle().startFreezeConversion(time);
@@ -43,6 +44,6 @@ public class CraftSkeleton extends CraftAbstractSkeleton implements Skeleton {
 
     @Override
     public int inPowderedSnowTime() {
-        return this.getHandle().inPowderSnowTime;
+        return this.getHandle().freezingTracker.afflictionTime;
     }
 }
