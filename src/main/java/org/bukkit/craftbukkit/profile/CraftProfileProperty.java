@@ -7,10 +7,9 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
 import com.google.gson.JsonParser;
 import com.mojang.authlib.properties.Property;
-import com.mojang.authlib.yggdrasil.ServicesKeySet;
-import com.mojang.authlib.yggdrasil.ServicesKeyType;
-import com.mojang.authlib.yggdrasil.YggdrasilAuthenticationService;
-import java.net.Proxy;
+import com.mojang.authlib.services.ServicesKeySet;
+import com.mojang.authlib.services.ServicesKeyType;
+import net.minecraft.server.MinecraftServer;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.LinkedHashMap;
@@ -113,7 +112,7 @@ public final class CraftProfileProperty {
 
 	static {
 		try {
-			PUBLIC_KEYS = new YggdrasilAuthenticationService(Proxy.NO_PROXY).getServicesKeySet();
+			PUBLIC_KEYS = MinecraftServer.getServer().services().servicesKeySet();
 		} catch (Exception var1) {
 			throw new Error("Could not load yggdrasil_session_pubkey.der! This indicates a bug.");
 		}
