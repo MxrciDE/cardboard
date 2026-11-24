@@ -1472,7 +1472,7 @@ public class CraftWorld extends CraftRegionAccessor implements World {
         }
 
         final long currentClockTime = this.world.getDefaultClockTime();
-        final TimeSkipEvent event = new TimeSkipEvent(this, TimeSkipEvent.SkipReason.CUSTOM, time - currentClockTime);
+        final TimeSkipEvent event = new TimeSkipEvent(this, io.papermc.paper.world.PaperWorldClock.minecraftHolderToBukkit(this.world.dimensionType().defaultClock().get()), TimeSkipEvent.SkipReason.CUSTOM, time - currentClockTime);
         CraftServer.INSTANCE.getPluginManager().callEvent(event);
         if (event.isCancelled()) {
             return;
