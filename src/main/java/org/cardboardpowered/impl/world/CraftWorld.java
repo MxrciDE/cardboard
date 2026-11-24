@@ -2385,11 +2385,27 @@ public class CraftWorld extends CraftRegionAccessor implements World {
 		// TODO Auto-generated method stub
 	}
 
-	@Override
-	public <T> void spawnParticle(Particle arg0, List<Player> arg1, Player arg2, double arg3, double arg4, double arg5,
-	                              int arg6, double arg7, double arg8, double arg9, double arg10, T arg11, boolean arg12) {
-		// TODO Auto-generated method stub
-	}
+    @Override
+    public <T> void spawnParticle(Particle particle, List<Player> receivers, Player sender, double x, double y, double z, int count, double offsetX, double offsetY, double offsetZ, double speedX, double speedY, double speedZ, T data, boolean force, Particle.RandomizationType randomizationType) {
+        data = org.bukkit.craftbukkit.CraftParticle.convertLegacy(data);
+        if (data != null) {
+            Preconditions.checkArgument(particle.getDataType().isInstance(data), "data (%s) should be %s", data.getClass(), particle.getDataType());
+        }
+        net.minecraft.core.particles.ParticleOptions particleOptions = org.bukkit.craftbukkit.CraftParticle.createParticleParam(particle, data);
+        net.minecraft.network.protocol.game.ClientboundLevelParticlesPacket packet = new net.minecraft.network.protocol.game.ClientboundLevelParticlesPacket(
+            particleOptions, force, false, x, y, z,
+            (float) offsetX, (float) offsetY, (float) offsetZ,
+            (float) speedX, (float) speedY, (float) speedZ,
+            count,
+            net.minecraft.network.protocol.game.ClientboundLevelParticlesPacket.RandomizationType.valueOf(randomizationType.name())
+        );
+        java.util.List<net.minecraft.server.level.ServerPlayer> targets = receivers == null
+            ? this.world.players()
+            : receivers.stream().map(player -> ((org.bukkit.craftbukkit.entity.CraftPlayer) player).getHandle()).toList();
+        for (net.minecraft.server.level.ServerPlayer target : targets) {
+            target.connection.send(packet);
+        }
+    }
 
 	// @Override
 	public boolean doesBedWork() {
