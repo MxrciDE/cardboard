@@ -175,7 +175,7 @@ public class CraftBlockType<B extends @NonNull BlockData> extends HolderableBase
 
     @Override
     public boolean isSolid() {
-        return this.getHandle().defaultBlockState().blocksMotion();
+        return this.getHandle().defaultBlockState().isSolid();
     }
 
     @Override
@@ -252,4 +252,10 @@ public class CraftBlockType<B extends @NonNull BlockData> extends HolderableBase
         return this.getHandle().hasCollision;
     }
     // Paper end - hasCollision API
+    @Override
+    public org.bukkit.Instrument getInstrument() {
+        net.minecraft.world.level.block.state.properties.NoteBlockInstrument instrument = this.getHandle().defaultBlockState().instrument();
+        return CraftBlockData.fromVanilla(instrument, org.bukkit.Instrument.class);
+    }
+
 }
