@@ -207,7 +207,7 @@ public class CraftHumanEntity extends CraftLivingEntity implements HumanEntity {
         }
 
         BedRule bedRule = bedBlock.getBedRule(this.getHandle().level(), pos);
-        if (this.getHandle().startSleepInBed(bedBlock, state, bedRule, pos, force).left().isPresent()) {
+        if (this.getHandle().startSleepInBed(bedBlock, state, bedRule, pos).left().isPresent()) {
             return false;
         }
 
