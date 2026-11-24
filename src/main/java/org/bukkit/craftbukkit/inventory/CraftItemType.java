@@ -15,8 +15,8 @@ import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStackTemplate;
 import net.minecraft.world.item.component.ItemAttributeModifiers;
-import net.minecraft.world.level.block.ComposterBlock;
 import net.minecraft.world.item.component.CookingFuel;
+import net.minecraft.world.item.component.Compostable;
 import net.minecraft.world.level.storage.loot.LootContext;
 import net.minecraft.world.level.storage.loot.LootParams;
 import net.minecraft.world.level.storage.loot.parameters.LootContextParamSets;
@@ -171,27 +171,28 @@ public class CraftItemType<M extends ItemMeta> extends HolderableBase<Item> impl
         }
 
         if (cookingFuel.burnTime() instanceof ResolvableInt.Reference burnTime) {
-            if (MinecraftServer.getServer() == null) {
+            if (CraftServer.INSTANCE.getServer() == null) {
                 throw new IllegalArgumentException("Too early to call this method");
             }
-            Holder.Reference<ContextIntProvider> provider = MinecraftServer.getServer().reloadableRegistries().lookup().getOrThrow(burnTime.key());
+            Holder.Reference<ContextIntProvider> provider = CraftServer.INSTANCE.getServer().reloadableRegistries().lookup().getOrThrow(burnTime.key());
             LootContext fakeContext = new LootContext.Builder(new LootParams.Builder(null).create(LootContextParamSets.EMPTY))
                 .withOptionalRandomSeed(42L)
-                .createWithoutLevel();
+                .create(java.util.Optional.empty());
             return provider.value().getInt(fakeContext);
         }
-        return 0;
+        return cookingFuel.burnTime() instanceof ResolvableInt.Constant constant ? constant.value() : 0;
     }
 
     @Override
     public boolean isCompostable() {
-        return ComposterBlock.COMPOSTABLES.containsKey(this.getHandle());
+        return this.getHandle().components().has(DataComponents.COMPOSTABLE);
     }
 
     @Override
     public float getCompostChance() {
         Preconditions.checkArgument(this.isCompostable(), "The item type " + this.getKey() + " is not compostable");
-        return ComposterBlock.COMPOSTABLES.getFloat(this.getHandle());
+        Compostable compostable = this.getHandle().components().get(DataComponents.COMPOSTABLE);
+        return compostable.layers() instanceof ResolvableInt.Constant constant ? Math.min(1.0f, constant.value() / 7.0f) : 0.0f;
     }
 
     @Override
