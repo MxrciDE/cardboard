@@ -235,7 +235,7 @@ public class CraftHumanEntity extends CraftLivingEntity implements HumanEntity {
     @Override
     public boolean canCriticalAttack(org.bukkit.entity.Entity entity) {
         Preconditions.checkArgument(entity != null, "entity cannot be null");
-        return this.getHandle().canCriticalAttack(((CraftEntity) entity).getHandle());
+        return this.getHandle().canCriticalAttack(((CraftEntity) entity).getHandle()) && !this.getHandle().level().paperConfig().entities.behavior.disablePlayerCrits;
     }
 
     @Override
