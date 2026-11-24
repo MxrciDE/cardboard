@@ -535,6 +535,11 @@ public class CraftLivingEntity extends CraftEntity implements LivingEntity {
         entity.setSwimming(arg0);
     }
 
+    @Override
+    public void swingHand(org.bukkit.inventory.EquipmentSlot hand, io.papermc.paper.datacomponent.item.SwingAnimation swingAnimation) {
+        this.getHandle().swing(CraftEquipmentSlot.getHand(hand), ((io.papermc.paper.datacomponent.item.PaperSwingAnimation) swingAnimation).getHandle(), true);
+    }
+
     private net.minecraft.world.item.component.SwingAnimation getSwingAnimation(InteractionHand hand) {
         net.minecraft.world.item.component.SwingAnimation animation = this.getHandle().getItemInHand(hand)
             .get(net.minecraft.core.component.DataComponents.ATTACK_ANIMATION);
