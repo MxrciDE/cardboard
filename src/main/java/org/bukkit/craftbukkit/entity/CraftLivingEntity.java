@@ -536,6 +536,18 @@ public class CraftLivingEntity extends CraftEntity implements LivingEntity {
     }
 
     @Override
+    public boolean isPersistenceRequired() {
+        return this.getHandle() instanceof net.minecraft.world.entity.Mob mob && mob.isPersistenceRequired();
+    }
+
+    @Override
+    public void setPersistenceRequired(boolean persistent) {
+        if (this.getHandle() instanceof net.minecraft.world.entity.Mob mob) {
+            mob.persistenceRequired = persistent;
+        }
+    }
+
+    @Override
     public void swingHand(org.bukkit.inventory.EquipmentSlot hand, io.papermc.paper.datacomponent.item.SwingAnimation swingAnimation) {
         this.getHandle().swing(CraftEquipmentSlot.getHand(hand), ((io.papermc.paper.datacomponent.item.PaperSwingAnimation) swingAnimation).getHandle(), true);
     }
