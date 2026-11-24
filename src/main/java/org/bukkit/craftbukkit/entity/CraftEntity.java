@@ -943,6 +943,11 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
     }
 
     @Override
+    @Override
+    public float getAirDrag() {
+        return this.getHandle().getAirDrag();
+    }
+
     public int getPortalCooldown() {
         return this.getHandle().getPortalCooldown();
     }
