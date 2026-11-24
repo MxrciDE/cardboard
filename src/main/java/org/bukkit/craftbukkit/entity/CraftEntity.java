@@ -82,6 +82,7 @@ import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 
 public abstract class CraftEntity implements org.bukkit.entity.Entity {
+    private final java.util.Map<net.kyori.adventure.key.Key, java.util.function.Predicate<org.bukkit.entity.Entity>> additionalAlliedRules = new java.util.HashMap<>();
 
     private static final Logger LOGGER = LogUtils.getLogger();
 
@@ -792,15 +793,27 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
     }
 
     @Override
+    public java.util.Map<net.kyori.adventure.key.Key, java.util.function.Predicate<org.bukkit.entity.Entity>> getAdditionalAlliedRules() {
+        return java.util.Collections.unmodifiableMap(this.additionalAlliedRules);
+    }
+
+    @Override
     public void addAdditionalAlliedRule(net.kyori.adventure.key.Key key, java.util.function.Predicate<org.bukkit.entity.Entity> predicate) {
+        Preconditions.checkArgument(key != null, "key cannot be null");
+        Preconditions.checkArgument(predicate != null, "predicate cannot be null");
+        this.additionalAlliedRules.put(key, predicate);
     }
 
     @Override
     public void removeAdditionalAlliedRule(net.kyori.adventure.key.Key key) {
+        Preconditions.checkArgument(key != null, "key cannot be null");
+        this.additionalAlliedRules.remove(key);
     }
 
     @Override
     public void removeAdditionalAlliedRule(net.kyori.adventure.key.Namespaced nameSpaced) {
+        Preconditions.checkArgument(nameSpaced != null, "nameSpaced cannot be null");
+        this.additionalAlliedRules.entrySet().removeIf(entry -> entry.getKey().namespace().equals(nameSpaced.namespace()));
     }
 
     @Override
