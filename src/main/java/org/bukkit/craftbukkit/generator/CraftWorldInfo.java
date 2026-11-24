@@ -80,26 +80,36 @@ public class CraftWorldInfo implements WorldInfo {
     @Override
     public org.bukkit.generator.BiomeProvider vanillaBiomeProvider() {
         final net.minecraft.world.level.levelgen.RandomState randomState;
-        if (vanillaChunkGenerator instanceof net.minecraft.world.level.levelgen.NoiseBasedChunkGenerator noiseBasedChunkGenerator) {
-            randomState = net.minecraft.world.level.levelgen.RandomState.create(noiseBasedChunkGenerator.generatorSettings().value(),
-                registryAccess.lookupOrThrow(net.minecraft.core.registries.Registries.NOISE), getSeed());
+        if (this.vanillaChunkGenerator instanceof net.minecraft.world.level.levelgen.NoiseBasedChunkGenerator noiseBasedChunkGenerator) {
+            randomState = net.minecraft.world.level.levelgen.RandomState.create(
+                this.registryAccess.lookupOrThrow(net.minecraft.core.registries.Registries.NOISE),
+                this.getSeed(),
+                noiseBasedChunkGenerator.generatorSettings().value()
+            );
         } else {
-            randomState = net.minecraft.world.level.levelgen.RandomState.create(net.minecraft.world.level.levelgen.NoiseGeneratorSettings.dummy(),
-                registryAccess.lookupOrThrow(net.minecraft.core.registries.Registries.NOISE), getSeed());
+            randomState = net.minecraft.world.level.levelgen.RandomState.create(
+                this.registryAccess.lookupOrThrow(net.minecraft.core.registries.Registries.NOISE),
+                this.getSeed(),
+                false,
+                net.minecraft.world.level.block.Blocks.STONE.defaultBlockState(),
+                63,
+                net.minecraft.world.level.levelgen.NoiseRouterData.none()
+            );
         }
 
-        final java.util.List<org.bukkit.block.Biome> possibleBiomes = CraftWorldInfo.this.vanillaChunkGenerator.getBiomeSource().possibleBiomes().stream()
+        final net.minecraft.world.level.biome.BiomeSource biomeSource = this.vanillaChunkGenerator.getBiomeSource();
+        final net.minecraft.world.level.biome.BiomeResolver resolver = biomeSource.createUncachedResolver(randomState);
+        final java.util.List<org.bukkit.block.Biome> possibleBiomes = biomeSource.possibleBiomes().stream()
             .map(CraftBiome::minecraftHolderToBukkit)
             .toList();
         return new org.bukkit.generator.BiomeProvider() {
             @Override
             public org.bukkit.block.Biome getBiome(final WorldInfo worldInfo, final int x, final int y, final int z) {
-                return org.bukkit.craftbukkit.block.CraftBiome.minecraftHolderToBukkit(
-                    CraftWorldInfo.this.vanillaChunkGenerator.getBiomeSource().getNoiseBiome(x >> 2, y >> 2, z >> 2, randomState.sampler()));
+                return CraftBiome.minecraftHolderToBukkit(resolver.getNoiseBiome(x >> 2, y >> 2, z >> 2));
             }
 
             @Override
-            public java.util.List<org.bukkit.block.Biome> getBiomes(final org.bukkit.generator.WorldInfo worldInfo) {
+            public java.util.List<org.bukkit.block.Biome> getBiomes(final WorldInfo worldInfo) {
                 return possibleBiomes;
             }
         };
