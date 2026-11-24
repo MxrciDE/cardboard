@@ -1062,13 +1062,14 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
     private void sendSignChange0(Component[] components, Location loc, DyeColor dyeColor, boolean hasGlowingText) {
         // Paper end
         SignBlockEntity sign = new SignBlockEntity(CraftLocation.toBlockPosition(loc), Blocks.OAK_SIGN.defaultBlockState());
-        SignText text = sign.getFrontText();
-        text = text.setColor(net.minecraft.world.item.DyeColor.byId(dyeColor.getWoolData()));
-        text = text.setHasGlowingText(hasGlowingText);
+        SignText text = sign.getText(SignTextSlot.FRONT);
+        SignText.Mutable mutableText = text.asMutable();
+        mutableText.setColor(net.minecraft.world.item.DyeColor.byId(dyeColor.getWoolData()));
+        mutableText.setTextGlowing(hasGlowingText);
         for (int i = 0; i < components.length; i++) {
-            text = text.setMessage(i, components[i]);
+            mutableText.setLine(i, components[i]);
         }
-        sign.setText(text, SignTextSlot.FRONT);
+        sign.setText(mutableText.asImmutable(), SignTextSlot.FRONT);
 
         this.getHandle().connection.send(new ClientboundBlockEntityDataPacket(sign.getBlockPos(), sign.getType(), sign.getUpdateTag(this.getHandle().registryAccess())));
     }
