@@ -565,7 +565,7 @@ public class CraftEventFactory {
 
     public static LootGenerateEvent callLootGenerateEvent(Container inventory, LootTable lootTable, LootContext lootInfo, List<ItemStack> loot, boolean plugin) {
         CraftWorld world = ((LevelBridge)lootInfo.getLevel()).cardboard$getWorld();
-        Entity entity = lootInfo.getOptionalParameter(LootContextParams.THIS_ENTITY);
+        Entity entity = lootInfo.getOptional(LootContextParams.THIS_ENTITY);
 
         NamespacedKey key = null; // CraftNamespacedKey.fromMinecraft(((IMixinLootManager)world.getHandle().getServer().getLootManager()).getLootTableToKeyMapBF().get(lootTable));
 
