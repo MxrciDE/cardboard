@@ -1515,6 +1515,18 @@ public class CraftWorld extends CraftRegionAccessor implements World {
         this.world.clockManager().setRate(io.papermc.paper.world.PaperWorldClock.bukkitToMinecraftHolder(clock), rate);
     }
 
+    @Override
+    public io.papermc.paper.world.chunk.ChunkGenerationState getChunkGenerationState(int x, int z) {
+        return this.world.getChunkSource().hasChunk(x, z)
+            ? io.papermc.paper.world.chunk.ChunkGenerationState.GENERATED
+            : io.papermc.paper.world.chunk.ChunkGenerationState.NOT_GENERATED;
+    }
+
+    @Override
+    public java.util.concurrent.CompletableFuture<io.papermc.paper.world.chunk.ChunkGenerationState> getChunkGenerationStateAsync(int x, int z) {
+        return java.util.concurrent.CompletableFuture.completedFuture(this.getChunkGenerationState(x, z));
+    }
+
     public void setFullTime(long time) {
         if (this.world.dimensionType().defaultClock().isEmpty()) {
             throw new IllegalArgumentException("Cannot set time in world without world clock");
