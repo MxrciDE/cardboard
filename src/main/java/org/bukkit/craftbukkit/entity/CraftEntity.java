@@ -207,7 +207,7 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
         }
         // Paper end
         this.entity.setDeltaMovement(CraftVector.toVec3(velocity));
-        this.entity.hurtMarked = true;
+        this.entity.syncVelocity = true;
     }
 
     /**
@@ -883,7 +883,7 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
 
     @Override
     public void setInvulnerable(boolean flag) {
-        this.getHandle().setInvulnerable(flag);
+        this.getHandle().setPermanentlyInvulnerable(flag);
     }
 
     @Override
