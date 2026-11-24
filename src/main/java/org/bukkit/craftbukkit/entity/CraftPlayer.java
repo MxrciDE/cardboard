@@ -3444,6 +3444,14 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
     }
 
     @Override
+    public <T> void spawnParticle(org.bukkit.Particle particle, double x, double y, double z, int count,
+            double offsetX, double offsetY, double offsetZ, double speedX, double speedY, double speedZ,
+            T data, boolean force, org.bukkit.Particle.RandomizationType randomizationType) {
+        this.getWorld().spawnParticle(particle, java.util.List.of(this), this, x, y, z, count,
+            offsetX, offsetY, offsetZ, speedX, speedY, speedZ, data, force, randomizationType);
+    }
+
+    @Override
     public io.papermc.paper.entity.PlayerPostEffects postEffects() {
         return new io.papermc.paper.entity.PaperPlayerPostEffects(this.getHandle());
     }
