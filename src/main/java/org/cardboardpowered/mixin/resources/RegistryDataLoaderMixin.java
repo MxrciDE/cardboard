@@ -15,6 +15,7 @@ import com.mojang.serialization.Decoder;
 
 import io.papermc.paper.registry.PaperRegistryAccess;
 import net.minecraft.core.HolderLookup;
+import net.minecraft.core.HolderGetter;
 import net.minecraft.core.HolderLookup.RegistryLookup;
 import net.minecraft.core.Registry;
 import net.minecraft.core.WritableRegistry;
@@ -52,46 +53,26 @@ public class RegistryDataLoaderMixin {
      * @reason Paper: add method to get the value for pre-filling builders in the reg mod API
      */
     @Overwrite
-    // private static RegistryOps.RegistryInfoLookup createContext(List<HolderLookup.RegistryLookup<?>> registries, List<Loader<?>> additionalRegistries) {
     private static RegistryInfoLookup createContext(final List<RegistryLookup<?>> registries,
-			final List<RegistryLoadTask<?>> additionalRegistries) {
-    final HashMap<ResourceKey<? extends Registry<?>>, RegistryOps.RegistryInfo<?>> map = new HashMap<>();
-        registries.forEach(registry -> map.put(registry.key(), createInfoForContextRegistry(registry)));
-        // registries.forEach(e -> map.put(e.key(), createInfoForContextRegistry((HolderLookup.RegistryLookup<?>)e)));
-        
-        additionalRegistries.forEach(e -> map.put(e.registryKey(), e.createRegistryInfo()));
-        // additionalRegistries.forEach(loader -> map.put(loader.registry().key(), createInfoForNewRegistry(loader.registry())));
-        
-        // Cardboard: Paper: providerForBuilders
-        // HolderLookup.Provider providerForBuilders = HolderLookup.Provider.create(Stream.concat(registries.stream(), additionalRegistries.stream().map(Loader::registry)));
-        HolderLookup.Provider providerForBuilders = HolderLookup.Provider.create(java.util.stream.Stream.concat(registries.stream(), additionalRegistries.stream().map(t -> t.registry))); // Paper - add method to get the value for pre-filling builders in the reg mod API
+            final List<RegistryLoadTask<?>> additionalRegistries) {
+        final Map<ResourceKey<? extends Registry<?>>, HolderGetter<?>> getters = new HashMap<>();
+        registries.forEach(registry -> getters.put(registry.key(), registry));
+        additionalRegistries.forEach(task -> getters.put(task.registryKey(), task.registry));
 
-        
-        return new RegistryOps.RegistryInfoLookup(){
+        final HolderLookup.Provider providerForBuilders = HolderLookup.Provider.create(
+            Stream.concat(registries.stream(), additionalRegistries.stream().map(task -> task.registry))
+        );
 
+        return new RegistryInfoLookup() {
             @Override
-            public <T> Optional<RegistryOps.RegistryInfo<T>> lookup(ResourceKey<? extends Registry<? extends T>> registryRef) {
-                return Optional.ofNullable((RegistryOps.RegistryInfo<T>)map.get(registryRef));
+            @SuppressWarnings("unchecked")
+            public <T> Optional<HolderGetter<T>> lookup(ResourceKey<? extends Registry<? extends T>> registryRef) {
+                return Optional.ofNullable((HolderGetter<T>) getters.get(registryRef));
             }
-            
-            // @Override
+
             public HolderLookup.Provider lookupForValueCopyViaBuilders() {
                 return providerForBuilders;
             }
-            
         };
     }
-    
-    /*
-    @Shadow
-    private static <T> RegistryOps.RegistryInfo<T> createInfoForNewRegistry(WritableRegistry<T> registry) {
-        return new RegistryOps.RegistryInfo<T>(registry, registry.createRegistrationLookup(), registry.registryLifecycle());
-    }
-    */
-
-    @Shadow
-    private static <T> RegistryOps.RegistryInfo<T> createInfoForContextRegistry(HolderLookup.RegistryLookup<T> registry) {
-        return new RegistryOps.RegistryInfo<T>(registry, registry, registry.registryLifecycle());
-    }
-    
 }
