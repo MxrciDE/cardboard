@@ -957,3 +957,5 @@ accessible	field	net/minecraft/world/level/block/entity/CreakingHeartBlockEntity
 accessible	field	net/minecraft/world/damagesource/CombatTracker	lastDamageTime	I
 # 26.2: expose SulfurCube fuse setter for the Bukkit SulfurCube API
 accessible	method	net/minecraft/world/entity/monster/cubemob/SulfurCube	setFuse	(I)V
+
+mutable field net/minecraft/server/ServerAdvancementManager advancements Ljava/util/Map;
