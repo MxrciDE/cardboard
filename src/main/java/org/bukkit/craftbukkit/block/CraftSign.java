@@ -191,6 +191,16 @@ public class CraftSign<T extends SignBlockEntity> extends CraftBlockEntityState<
     }
 
     // Paper start
+    @Override
+    public void setOperatorFeaturesAllowed(boolean allowed) {
+        this.getSnapshot().allowOpFeatures = allowed;
+    }
+
+    @Override
+    public boolean isOperatorFeaturesAllowed() {
+        return this.getSnapshot().allowOpFeatures;
+    }
+
     public static Component[] sanitizeLines(java.util.List<? extends net.kyori.adventure.text.Component> lines) {
         Component[] components = new Component[4];
         for (int i = 0; i < 4; i++) {
