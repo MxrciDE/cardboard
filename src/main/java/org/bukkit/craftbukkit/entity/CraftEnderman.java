@@ -1,7 +1,6 @@
 package org.bukkit.craftbukkit.entity;
 
 import com.google.common.base.Preconditions;
-import net.minecraft.world.entity.monster.Enderman;
 import net.minecraft.world.level.block.state.BlockState;
 import org.bukkit.Material;
 import org.bukkit.block.data.BlockData;
