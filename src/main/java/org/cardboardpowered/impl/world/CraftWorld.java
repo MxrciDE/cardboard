@@ -1466,6 +1466,55 @@ public class CraftWorld extends CraftRegionAccessor implements World {
 	}
 
 	@Override
+    @Override
+    public @org.jetbrains.annotations.Nullable io.papermc.paper.world.WorldClock getDefaultClock() {
+        return this.world.dimensionType().defaultClock().map(io.papermc.paper.world.PaperWorldClock::minecraftHolderToBukkit).orElse(null);
+    }
+
+    @Override
+    public long getFullTime(io.papermc.paper.world.WorldClock clock) {
+        Preconditions.checkArgument(clock != null, "clock cannot be null");
+        return this.world.clockManager().getInstance(io.papermc.paper.world.PaperWorldClock.bukkitToMinecraftHolder(clock)).totalTicks();
+    }
+
+    @Override
+    public void setFullTime(io.papermc.paper.world.WorldClock clock, long time) {
+        Preconditions.checkArgument(clock != null, "clock cannot be null");
+        net.minecraft.core.Holder<net.minecraft.world.clock.WorldClock> holder = io.papermc.paper.world.PaperWorldClock.bukkitToMinecraftHolder(clock);
+        Preconditions.checkArgument(time >= 0, "time cannot be negative, was %s", time);
+        long current = this.world.clockManager().getInstance(holder).totalTicks();
+        TimeSkipEvent event = new TimeSkipEvent(this, clock, TimeSkipEvent.SkipReason.CUSTOM, time - current);
+        CraftServer.INSTANCE.getPluginManager().callEvent(event);
+        if (!event.isCancelled()) {
+            this.world.clockManager().setTotalTicks(holder, Math.max(current + event.getSkipAmount(), 0L));
+        }
+    }
+
+    @Override
+    public boolean isClockPaused(io.papermc.paper.world.WorldClock clock) {
+        Preconditions.checkArgument(clock != null, "clock cannot be null");
+        return this.world.clockManager().getInstance(io.papermc.paper.world.PaperWorldClock.bukkitToMinecraftHolder(clock)).isPaused();
+    }
+
+    @Override
+    public void setClockPaused(io.papermc.paper.world.WorldClock clock, boolean paused) {
+        Preconditions.checkArgument(clock != null, "clock cannot be null");
+        this.world.clockManager().setPaused(io.papermc.paper.world.PaperWorldClock.bukkitToMinecraftHolder(clock), paused);
+    }
+
+    @Override
+    public float getClockRate(io.papermc.paper.world.WorldClock clock) {
+        Preconditions.checkArgument(clock != null, "clock cannot be null");
+        return this.world.clockManager().getInstance(io.papermc.paper.world.PaperWorldClock.bukkitToMinecraftHolder(clock)).rate();
+    }
+
+    @Override
+    public void setClockRate(io.papermc.paper.world.WorldClock clock, float rate) {
+        Preconditions.checkArgument(clock != null, "clock cannot be null");
+        Preconditions.checkArgument(Float.isFinite(rate) && rate > 0.0F, "rate must be positive and finite, was %s", rate);
+        this.world.clockManager().setRate(io.papermc.paper.world.PaperWorldClock.bukkitToMinecraftHolder(clock), rate);
+    }
+
     public void setFullTime(long time) {
         if (this.world.dimensionType().defaultClock().isEmpty()) {
             throw new IllegalArgumentException("Cannot set time in world without world clock");
