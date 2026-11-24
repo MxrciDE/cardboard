@@ -52,6 +52,7 @@ import net.minecraft.core.HolderSet;
 import net.minecraft.core.Registry;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.component.DataComponentPatch;
+import net.minecraft.core.component.Removed;
 import net.minecraft.core.component.DataComponentType;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.Registries;
@@ -547,15 +548,15 @@ class CraftMetaItem implements ItemMeta, Damageable, Repairable, BlockDataMeta {
             handledTags = extraHandledTags;
         }
         // Paper end - improve checking handled data component types
-        Set<Map.Entry<DataComponentType<?>, Optional<?>>> keys = tag.map.entrySet();
-        for (Map.Entry<DataComponentType<?>, Optional<?>> key : keys) {
+        Set<Map.Entry<DataComponentType<?>, Object>> keys = tag.map.entrySet();
+        for (Map.Entry<DataComponentType<?>, Object> key : keys) {
             if (!handledTags.contains(key.getKey())) { // Paper - improve checking handled data component types
-                key.getValue().ifPresent((value) -> {
-                    this.unhandledTags.set((DataComponentType) key.getKey(), value);
-                });
+                if (Removed.isNotRemoved(key.getValue())) {
+                    this.unhandledTags.set((DataComponentType) key.getKey(), key.getValue());
+                }
             }
 
-            if (key.getValue().isEmpty()) {
+            if (Removed.isRemoved(key.getValue())) {
                 this.removedTags.add(key.getKey());
             }
         }
@@ -782,7 +783,7 @@ class CraftMetaItem implements ItemMeta, Damageable, Repairable, BlockDataMeta {
                 });
                 ((DataComponentPatch_BuilderBridge)this.unhandledTags).copy(unhandledPatch.forget(type -> type == CraftMetaItem.CAN_PLACE_ON.TYPE || type == CraftMetaItem.CAN_BREAK.TYPE));
 
-                for (Entry<DataComponentType<?>, Optional<?>> entry : unhandledPatch.map.entrySet()) {
+                for (Entry<DataComponentType<?>, Object> entry : unhandledPatch.map.entrySet()) {
                     // Move removed unhandled tags to dedicated removedTags
                     if (entry.getValue().isEmpty()) {
                         DataComponentType<?> key = entry.getKey();
@@ -1046,7 +1047,7 @@ class CraftMetaItem implements ItemMeta, Damageable, Repairable, BlockDataMeta {
             tag.put(CraftMetaItem.CAN_BREAK, new net.minecraft.world.item.AdventureModePredicate(this.canBreakPredicates));
         }
 
-        for (Map.Entry<DataComponentType<?>, Optional<?>> e : this.unhandledTags.build().map.entrySet()) {
+        for (Map.Entry<DataComponentType<?>, Object> e : this.unhandledTags.build().map.entrySet()) {
             e.getValue().ifPresent((value) -> {
                 tag.builder.set((DataComponentType) e.getKey(), value);
             });
@@ -1857,7 +1858,7 @@ class CraftMetaItem implements ItemMeta, Damageable, Repairable, BlockDataMeta {
         Registry<DataComponentType<?>> componentTypeRegistry = registryAccess.lookupOrThrow(Registries.DATA_COMPONENT_TYPE);
 
         StringJoiner componentString = new StringJoiner(",", "[", "]");
-        for (Entry<DataComponentType<?>, Optional<?>> entry : patch.map.entrySet()) {
+        for (Entry<DataComponentType<?>, Object> entry : patch.map.entrySet()) {
             DataComponentType<?> componentType = entry.getKey();
             Optional<?> componentValue = entry.getValue();
             String componentKey = componentTypeRegistry.getResourceKey(componentType).orElseThrow().identifier().toString();
