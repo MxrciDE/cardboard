@@ -2697,6 +2697,14 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
     }
 
     @Override
+    public java.net.SocketAddress getSocketAddress() {
+        if (this.getHandle().connection == null) {
+            return null;
+        }
+        return this.getHandle().connection.getRemoteAddress();
+    }
+
+    @Override
     public <T> void spawnParticle(Particle particle, double x, double y, double z, int count, double offsetX, double offsetY, double offsetZ, double extra, T data, boolean force) {
         ClientboundLevelParticlesPacket packet = new ClientboundLevelParticlesPacket(CraftParticle.createParticleParam(particle, data), force, false, x, y, z, (float) offsetX, (float) offsetY, (float) offsetZ, (float) extra, count); // Paper - fix x/y/z precision loss
         this.getHandle().connection.send(packet);
