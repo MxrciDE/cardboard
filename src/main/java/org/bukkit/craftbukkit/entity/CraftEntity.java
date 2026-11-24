@@ -792,6 +792,10 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
     }
 
     @Override
+    public void addAdditionalAlliedRule(net.kyori.adventure.key.Key key, java.util.function.Predicate<org.bukkit.entity.Entity> predicate) {
+    }
+
+    @Override
     public void removeAdditionalAlliedRule(net.kyori.adventure.key.Key key) {
     }
 
