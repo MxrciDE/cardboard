@@ -2738,7 +2738,7 @@ public class CraftWorld extends CraftRegionAccessor implements World {
 		final List<Biome> possibleBiomes = biomeSource.possibleBiomes().stream().map(CraftBiome::minecraftHolderToBukkit).toList();
 		return new BiomeProvider() {
 			public Biome getBiome(WorldInfo worldInfo, int x, int y, int z) {
-				return CraftBiome.minecraftHolderToBukkit(this.getHandle().getBiome(new BlockPos(x, y, z)));
+				return CraftBiome.minecraftHolderToBukkit(this.world.getBiome(new BlockPos(x, y, z)));
 			}
 
 			public List<Biome> getBiomes(WorldInfo worldInfo) {
