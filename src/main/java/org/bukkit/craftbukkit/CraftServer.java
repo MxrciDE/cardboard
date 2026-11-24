@@ -1768,6 +1768,32 @@ public class CraftServer extends CardboardAbstractServer implements Server {
     }
 
     @Override
+    public org.bukkit.inventory.ItemStack createExplorerMap(org.bukkit.World world, org.bukkit.Location location,
+            org.bukkit.generator.structure.Structure structure, org.bukkit.map.MapCursor.Type mapIcon,
+            int radius, boolean findUnexplored) {
+        Preconditions.checkArgument(world != null, "World cannot be null");
+        Preconditions.checkArgument(location != null, "Location cannot be null");
+        Preconditions.checkArgument(structure != null, "Structure cannot be null");
+        Preconditions.checkArgument(mapIcon != null, "mapIcon cannot be null");
+
+        final net.minecraft.server.level.ServerLevel level = ((org.bukkit.craftbukkit.CraftWorld) world).getHandle();
+        final var searchResult = world.locateNearestStructure(location, structure, radius, findUnexplored);
+        if (searchResult == null) {
+            return null;
+        }
+        final org.bukkit.Location structureLocation = searchResult.getLocation();
+        final net.minecraft.core.BlockPos structurePos = org.bukkit.craftbukkit.util.CraftLocation.toBlockPos(structureLocation);
+        final net.minecraft.world.item.ItemStack stack = net.minecraft.world.item.MapItem.create(
+            level, structurePos.getX(), structurePos.getZ(), org.bukkit.map.MapView.Scale.NORMAL.getValue(), true, true
+        );
+        net.minecraft.world.item.MapItem.renderBiomePreviewMap(level, stack);
+        net.minecraft.world.level.saveddata.maps.MapItemSavedData.addTargetDecoration(
+            stack, structurePos, "+", org.bukkit.craftbukkit.map.CraftMapCursor.CraftType.bukkitToMinecraftHolder(mapIcon)
+        );
+        return org.bukkit.craftbukkit.inventory.CraftItemStack.asBukkitCopy(stack);
+    }
+
+    @Override
     public void shutdown() {
         server.halt(false);
     }
