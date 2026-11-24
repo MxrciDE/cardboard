@@ -3443,4 +3443,9 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
         // vanilla has no such counter, so there is nothing to reset.
     }
 
+    @Override
+    public io.papermc.paper.entity.PlayerPostEffects postEffects() {
+        return new io.papermc.paper.entity.PaperPlayerPostEffects(this.getHandle());
+    }
+
 }
