@@ -32,7 +32,8 @@ import net.minecraft.world.inventory.MerchantMenu;
 import net.minecraft.world.item.ItemCooldowns;
 import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.item.crafting.RecipeManager;
-import net.minecraft.world.level.block.BedBlock;
+import net.minecraft.world.attribute.BedRule;
+import net.minecraft.world.level.block.AbstractBedBlock;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
@@ -201,17 +202,17 @@ public class CraftHumanEntity extends CraftLivingEntity implements HumanEntity {
 
         BlockPos pos = CraftLocation.toBlockPosition(location);
         BlockState state = this.getHandle().level().getBlockState(pos);
-        if (!(state.getBlock() instanceof BedBlock)) {
+        if (!(state.getBlock() instanceof AbstractBedBlock bedBlock)) {
             return false;
         }
 
-        if (this.getHandle().startSleepInBed(pos).left().isPresent()) { //TODO: force?
+        BedRule bedRule = bedBlock.getBedRule(this.getHandle().level(), pos);
+        if (this.getHandle().startSleepInBed(bedBlock, state, bedRule, pos, force).left().isPresent()) {
             return false;
         }
 
-        // From BlockBed
-        state = state.setValue(BedBlock.OCCUPIED, true);
-        this.getHandle().level().setBlock(pos, state, net.minecraft.world.level.block.Block.UPDATE_INVISIBLE);
+        state = state.setValue(AbstractBedBlock.OCCUPIED, true);
+        this.getHandle().level().setBlockAndUpdate(pos, state);
 
         return true;
     }
