@@ -38,8 +38,8 @@ public class CraftSign<T extends SignBlockEntity> extends CraftBlockEntityState<
     @Override
     protected void load(T blockEntity) {
         super.load(blockEntity);
-        this.front = new CraftSignSide(blockEntity.getFrontText());
-        this.back = new CraftSignSide(blockEntity.getBackText());
+        this.front = new CraftSignSide(blockEntity.getText(net.minecraft.world.level.block.entity.SignTextSlot.FRONT));
+        this.back = new CraftSignSide(blockEntity.getText(net.minecraft.world.level.block.entity.SignTextSlot.BACK));
     }
 
     // Paper start
@@ -124,7 +124,7 @@ public class CraftSign<T extends SignBlockEntity> extends CraftBlockEntityState<
         this.ensureNoWorldGeneration();
         Preconditions.checkArgument(player != null, "player cannot be null");
 
-        if (this.getSnapshot().isFacingFrontText(((CraftPlayer) player).getHandle())) {
+        if (this.getSnapshot().getSlotPlayerIsFacing(((CraftPlayer) player).getHandle()) == net.minecraft.world.level.block.entity.SignTextSlot.FRONT) {
             return this.front;
         }
 
@@ -152,8 +152,8 @@ public class CraftSign<T extends SignBlockEntity> extends CraftBlockEntityState<
 
     @Override
     public void applyTo(T blockEntity) {
-        this.getSnapshot().setText(this.front.applyLegacyStringToSignSide(), true);
-        this.getSnapshot().setText(this.back.applyLegacyStringToSignSide(), false);
+        this.getSnapshot().setText(this.front.applyLegacyStringToSignSide(), net.minecraft.world.level.block.entity.SignTextSlot.FRONT);
+        this.getSnapshot().setText(this.back.applyLegacyStringToSignSide(), net.minecraft.world.level.block.entity.SignTextSlot.BACK);
 
         super.applyTo(blockEntity);
     }
@@ -187,7 +187,7 @@ public class CraftSign<T extends SignBlockEntity> extends CraftBlockEntityState<
         SignBlockEntity blockEntity = ((CraftSign<?>) sign).getBlockEntity();
         blockEntity.setAllowedPlayerEditor(player.getUniqueId());
 
-        ((CraftPlayer) player).getHandle().openTextEdit(blockEntity, Side.FRONT == side);
+        ((CraftPlayer) player).getHandle().openTextEdit(blockEntity, org.bukkit.craftbukkit.block.sign.CraftSignSide.toVanilla(side));
     }
 
     // Paper start
