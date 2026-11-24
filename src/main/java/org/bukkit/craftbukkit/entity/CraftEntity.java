@@ -792,6 +792,14 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
     }
 
     @Override
+    public void removeAdditionalAlliedRule(net.kyori.adventure.key.Key key) {
+    }
+
+    @Override
+    public void removeAdditionalAlliedRule(net.kyori.adventure.key.Namespaced nameSpaced) {
+    }
+
+    @Override
     public String getName() {
         return CraftChatMessage.fromComponent(this.getHandle().getName());
     }
