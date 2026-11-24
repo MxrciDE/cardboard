@@ -1679,6 +1679,27 @@ public class CraftServer extends CardboardAbstractServer implements Server {
     }
 
     @Override
+    public boolean addRecipes(Iterable<Recipe> recipes) {
+        org.spigotmc.AsyncCatcher.catchOp("Recipes Add");
+        Preconditions.checkArgument(recipes != null, "recipes cannot be null");
+        boolean anyAdded = false;
+        final net.minecraft.world.item.crafting.RecipeManager recipeManager = this.getServer().getRecipeManager();
+        for (Recipe recipe : recipes) {
+            final CraftRecipe craftRecipe = CraftRecipe.fromBukkitRecipe(recipe);
+            if (craftRecipe != null) {
+                final net.minecraft.world.item.crafting.RecipeHolder<?> holder = craftRecipe.toMinecraftRecipe();
+                recipeManager.recipes.byType.put(holder.value().getType(), holder);
+                recipeManager.recipes.byKey.put(holder.id(), holder);
+                anyAdded = true;
+            }
+        }
+        if (anyAdded) {
+            recipeManager.finalizeRecipeLoading(net.minecraft.world.flag.FeatureFlags.DEFAULT_FLAGS);
+        }
+        return anyAdded;
+    }
+
+    @Override
     public boolean hasRecipe(NamespacedKey recipeKey) {
         Preconditions.checkArgument(recipeKey != null, "recipeKey cannot be null");
         final net.minecraft.resources.ResourceKey<net.minecraft.world.item.crafting.Recipe<?>> id =
