@@ -334,7 +334,7 @@ public class CraftLivingEntity extends CraftEntity implements LivingEntity {
 
     @Override
     public int getNoDamageTicks() {
-        return entity.invulnerableTime;
+        return this.getHandle().damageCooldownTime;
     }
 
     @Override
