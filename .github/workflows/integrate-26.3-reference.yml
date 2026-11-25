@@ -133,6 +133,8 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
+          # Keep workflow files from the current branch in the commit tree, but do not stage changes from the upstream reference.
+          git restore --source=HEAD --staged -- .github/workflows
           if ! git diff --cached --quiet; then
             git commit -m "Integrate verified Minecraft 26.3 baseline and preserve Paper API 256"
             git push origin HEAD:port/26.3-integration
