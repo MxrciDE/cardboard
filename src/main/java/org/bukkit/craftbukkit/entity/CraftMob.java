@@ -27,6 +27,11 @@ public abstract class CraftMob extends CraftLivingEntity implements Mob, io.pape
     }
 
     @Override
+    public boolean isPersistenceRequired() {
+        return this.getHandle().isPersistenceRequired();
+    }
+
+    @Override
     public net.minecraft.world.entity.Mob getHandle() {
         return (net.minecraft.world.entity.Mob) this.entity;
     }
