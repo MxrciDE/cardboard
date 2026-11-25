@@ -35,7 +35,12 @@ public final class PaperPlayerPostEffects implements PlayerPostEffects {
             Preconditions.checkArgument(effect != null, "effects cannot be null");
             Preconditions.checkArgument(ids.add(PaperAdventure.asVanilla(effect)), "effects cannot be duplicate [%s]", effect);
         }
-        return this.getHandle().setPostEffects(ids);
+        this.getHandle().clearPostEffects();
+        boolean changed = false;
+        for (final Identifier id : ids) {
+            changed |= this.getHandle().addPostEffect(id);
+        }
+        return changed;
     }
 
     @Override
