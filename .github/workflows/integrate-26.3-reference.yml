@@ -50,8 +50,8 @@ jobs:
           }
 
           keep_file PORTING-26.3.md
-          keep_file .github/workflows/build.yml
-          keep_file .github/workflows/integrate-26.3-reference.yml
+          mkdir -p "$KEEP/.github"
+          cp -a .github/workflows "$KEEP/.github/workflows"
           keep_file src/main/java/io/papermc/paper/world/PaperWorldClock.java
           keep_file src/main/java/org/cardboardpowered/impl/world/CraftWorld.java
           keep_file src/main/java/io/papermc/paper/registry/set/PaperRegistrySets.java
@@ -67,8 +67,8 @@ jobs:
           }
 
           restore_file PORTING-26.3.md
-          restore_file .github/workflows/build.yml
-          restore_file .github/workflows/integrate-26.3-reference.yml
+          rm -rf .github/workflows
+          cp -a "$KEEP/.github/workflows" .github/workflows
           restore_file src/main/java/io/papermc/paper/world/PaperWorldClock.java
           restore_file src/main/java/io/papermc/paper/registry/set/PaperRegistrySets.java
 
