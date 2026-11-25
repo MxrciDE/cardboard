@@ -971,3 +971,5 @@ accessible method net/minecraft/world/entity/player/Player canCriticalAttack (Ln
 accessible field net/minecraft/world/entity/ConversionTracker afflictionTime I
 accessible method net/minecraft/world/entity/ConversionTracker setConverting (Z)V
 accessible method net/minecraft/world/entity/Entity getAirDrag ()F
+
+accessible	method	net/minecraft/world/entity/Entity	getDefaultGravity	()D
