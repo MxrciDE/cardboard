@@ -1537,13 +1537,21 @@ private final Map<ChunkPos, Set<Plugin>> pluginChunkTickets = new java.util.Hash
         return this.world.dimensionType().defaultClock().map(io.papermc.paper.world.PaperWorldClock::minecraftHolderToBukkit).orElse(null);
     }
 
+    @Override
+    public void setClockRate(@NotNull io.papermc.paper.world.WorldClock clock, float rate) {
+        Preconditions.checkArgument(clock != null, "clock cannot be null");
+        Preconditions.checkArgument(Float.isFinite(rate) && rate > 0.0F, "rate must be positive and finite, was %s", rate);
+        this.world.clockManager().setRate(io.papermc.paper.world.PaperWorldClock.bukkitToMinecraftHolder(clock), rate);
+    }
+
     public void setFullTime(long time) {
         if (this.world.dimensionType().defaultClock().isEmpty()) {
             throw new IllegalArgumentException("Cannot set time in world without world clock");
         }
 
+        final io.papermc.paper.world.WorldClock defaultClock = this.getDefaultClock();
         final long currentClockTime = this.world.getDefaultClockTime();
-        final TimeSkipEvent event = new TimeSkipEvent(this, TimeSkipEvent.SkipReason.CUSTOM, time - currentClockTime);
+        final TimeSkipEvent event = new TimeSkipEvent(this, defaultClock, TimeSkipEvent.SkipReason.CUSTOM, time - currentClockTime);
         CraftServer.INSTANCE.getPluginManager().callEvent(event);
         if (event.isCancelled()) {
             return;
