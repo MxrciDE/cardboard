@@ -47,6 +47,7 @@ import org.bukkit.block.BlockFace;
 import org.bukkit.block.PistonMoveReaction;
 import org.bukkit.craftbukkit.CraftServer;
 import org.bukkit.craftbukkit.CraftSound;
+import org.bukkit.craftbukkit.damage.CraftDamageSource;
 import org.bukkit.craftbukkit.block.CraftBlock;
 import org.bukkit.craftbukkit.persistence.CraftPersistentDataContainer;
 import org.bukkit.craftbukkit.persistence.CraftPersistentDataTypeRegistry;
@@ -955,6 +956,12 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
     @Override
     public double getDefaultGravity() {
         return this.getHandle().getDefaultGravity();
+    }
+
+    @Override
+    public boolean isInvulnerableTo(org.bukkit.damage.DamageSource damageSource) {
+        Preconditions.checkArgument(damageSource instanceof CraftDamageSource, "damageSource must be a CraftDamageSource");
+        return this.getHandle().isInvulnerableTo(((CraftDamageSource) damageSource).getHandle());
     }
 
     public int getPortalCooldown() {
