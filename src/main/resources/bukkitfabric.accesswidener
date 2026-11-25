@@ -973,3 +973,7 @@ accessible method net/minecraft/world/entity/ConversionTracker setConverting (Z)
 accessible method net/minecraft/world/entity/Entity getAirDrag ()F
 
 accessible	method	net/minecraft/world/entity/Entity	getDefaultGravity	()D
+
+# 26.3: Bukkit Enderman teleport API access
+accessible method net/minecraft/world/entity/monster/Enderman teleport ()Z
+accessible method net/minecraft/world/entity/monster/Enderman teleportTowards (Lnet/minecraft/world/entity/Entity;)Z
