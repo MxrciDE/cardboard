@@ -103,7 +103,7 @@ public class PaperInstrumentRegistryEntry implements InstrumentRegistryEntry {
 
         @Override
         public Builder durabilityDamage(final int durabilityDamage) {
-            this.durabilityDamage = asArgumentMin(durabilityDamage, "durabilityDamage", 0);
+            this.durabilityDamage = durabilityDamage;
             return this;
         }
 
