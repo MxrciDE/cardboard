@@ -23,6 +23,7 @@ public class PaperInstrumentRegistryEntry implements InstrumentRegistryEntry {
     protected @Nullable Holder<SoundEvent> soundEvent;
     protected @Nullable Float useDuration;
     protected @Nullable Float range;
+    protected @Nullable Integer durabilityDamage;
     protected @Nullable Component description;
 
     public PaperInstrumentRegistryEntry(final Conversions conversions, final @Nullable Instrument internal) {
@@ -34,6 +35,7 @@ public class PaperInstrumentRegistryEntry implements InstrumentRegistryEntry {
         this.soundEvent = internal.soundEvent();
         this.useDuration = internal.useDuration();
         this.range = internal.range();
+        this.durabilityDamage = internal.durabilityDamage();
         this.description = internal.description();
     }
 
@@ -51,6 +53,11 @@ public class PaperInstrumentRegistryEntry implements InstrumentRegistryEntry {
     @Override
     public @Positive float range() {
         return asConfigured(this.range, "range");
+    }
+
+    @Override
+    public int durabilityDamage() {
+        return asConfigured(this.durabilityDamage, "durabilityDamage");
     }
 
     @Override
@@ -95,6 +102,12 @@ public class PaperInstrumentRegistryEntry implements InstrumentRegistryEntry {
         }
 
         @Override
+        public Builder durabilityDamage(final int durabilityDamage) {
+            this.durabilityDamage = asArgumentMin(durabilityDamage, "durabilityDamage", 0);
+            return this;
+        }
+
+        @Override
         public Builder description(final net.kyori.adventure.text.Component description) {
             this.description = this.conversions.asVanilla(asArgument(description, "description"));
             return this;
@@ -106,6 +119,7 @@ public class PaperInstrumentRegistryEntry implements InstrumentRegistryEntry {
                 asConfigured(this.soundEvent, "soundEvent"),
                 this.duration(),
                 this.range(),
+                this.durabilityDamage(),
                 asConfigured(this.description, "description")
             );
         }
