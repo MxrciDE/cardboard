@@ -7,6 +7,8 @@ import org.jspecify.annotations.Nullable;
 public interface MobBridge {
     net.minecraft.world.entity.ai.goal.GoalSelector cardboard$getGoalSelector();
 
+    void cardboard$setPersistenceRequired(boolean persistent);
+
     net.minecraft.world.entity.ai.goal.GoalSelector cardboard$getTargetSelector();
 
     boolean cardboard$setTarget(@Nullable LivingEntity target, EntityTargetEvent.@Nullable TargetReason reason);
