@@ -9,6 +9,11 @@ public record PaperTeleportRandomly(
     }
 
     @Override
+    public boolean directionalParticles() {
+        return this.impl.showTeleportParticles();
+    }
+
+    @Override
     public net.minecraft.world.item.consume_effects.TeleportRandomlyConsumeEffect getHandle() {
         return this.impl;
     }
