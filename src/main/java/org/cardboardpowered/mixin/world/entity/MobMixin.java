@@ -24,6 +24,14 @@ public abstract class MobMixin extends LivingEntity implements MobBridge, Entity
     public LivingEntity target;
 
     @Shadow
+    private boolean persistenceRequired;
+
+    @Override
+    public void cardboard$setPersistenceRequired(boolean persistent) {
+        this.persistenceRequired = persistent;
+    }
+
+    @Shadow
     protected GoalSelector goalSelector;
 
     @Shadow
