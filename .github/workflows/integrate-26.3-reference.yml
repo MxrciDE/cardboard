@@ -88,7 +88,7 @@ jobs:
           if "getDefaultClock()" not in current:
               block = original[original.index(start):original.index(end)]
               if insertion not in current:
-                  raise SystemExit("Could not locate the CraftWorld time setter insertion point")
+                  raise SystemExit("Could not locate the CraftWorld setFullTime method insertion point")
               current = current.replace(insertion, block + "\n" + insertion, 1)
               source.write_text(current)
           PY
