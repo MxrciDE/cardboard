@@ -2501,6 +2501,33 @@ public class CraftServer extends CardboardAbstractServer implements Server {
 		return null;
 	}
 
+
+    @Override
+    public @Nullable ItemStack createExplorerMap(@NotNull World world, @NotNull Location location,
+            org.bukkit.generator.structure.@NotNull StructureType structureType,
+            org.bukkit.map.MapCursor.@NotNull Type mapIcon, int radius, boolean findUnexplored) {
+        Preconditions.checkArgument(world != null, "world cannot be null");
+        Preconditions.checkArgument(location != null, "location cannot be null");
+        Preconditions.checkArgument(structureType != null, "structureType cannot be null");
+        Preconditions.checkArgument(mapIcon != null, "mapIcon cannot be null");
+
+        final ServerLevel level = ((CraftWorld) world).getHandle();
+        final var searchResult = world.locateNearestStructure(location, structureType, radius, findUnexplored);
+        if (searchResult == null) {
+            return null;
+        }
+        final Location structureLocation = searchResult.getLocation();
+        final BlockPos structurePos = CraftLocation.toBlockPos(structureLocation);
+        final net.minecraft.world.item.ItemStack stack = MapItem.create(
+            level, structurePos.getX(), structurePos.getZ(), org.bukkit.map.MapView.Scale.NORMAL.getValue(), true, true
+        );
+        MapItem.renderBiomePreviewMap(level, stack);
+        net.minecraft.world.level.saveddata.maps.MapItemSavedData.addTargetDecoration(
+            stack, structurePos, "+", org.bukkit.craftbukkit.map.CraftMapCursor.CraftType.bukkitToMinecraftHolder(mapIcon)
+        );
+        return CraftItemStack.asBukkitCopy(stack);
+    }
+
 	@Override
 	public void banIP(@NotNull InetAddress address) {
 		((IpBanList)this.getBanList(BanList.Type.IP)).addBan(address, null, (java.util.Date)null, null);
