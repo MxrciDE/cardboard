@@ -10,7 +10,7 @@ public record PaperTeleportRandomly(
 
     @Override
     public boolean directionalParticles() {
-        return this.impl.showTeleportParticles();
+        return false;
     }
 
     @Override
