@@ -112,14 +112,6 @@ jobs:
               raise SystemExit("Could not set the integration branch metadata")
           properties.write_text(text)
 
-          ci = Path(".github/workflows/ci.yml")
-          text = ci.read_text()
-          needle = "      - ver/26.3"
-          if needle not in text:
-              raise SystemExit("Could not locate CI branch filters")
-          text = text.replace(needle, needle + "\n      - port/26.3-integration")
-          ci.write_text(text)
-
           for path in Path(".").rglob("*"):
               if not path.is_file() or ".git" in path.parts:
                   continue
