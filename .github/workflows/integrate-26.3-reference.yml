@@ -1,0 +1,149 @@
+name: Integrate verified Minecraft 26.3 baseline
+
+on:
+  push:
+    branches:
+      - port/26.3-integration
+    paths:
+      - .github/workflows/integrate-26.3-reference.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: cardboard-26.3-integration
+  cancel-in-progress: false
+
+jobs:
+  integrate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - name: Checkout integration branch
+        uses: actions/checkout@v4
+        with:
+          ref: port/26.3-integration
+          fetch-depth: 0
+
+      - name: Set up Java 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Integrate reference release, preserve API 256 work, and validate
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          KEEP=/tmp/cardboard-port-keep
+          mkdir -p "$KEEP"
+
+          keep_file() {
+            local path="$1"
+            mkdir -p "$KEEP/$(dirname "$path")"
+            git show "HEAD:$path" > "$KEEP/$path"
+          }
+
+          keep_file PORTING-26.3.md
+          keep_file .github/workflows/build.yml
+          keep_file .github/workflows/integrate-26.3-reference.yml
+          keep_file src/main/java/io/papermc/paper/world/PaperWorldClock.java
+          keep_file src/main/java/org/cardboardpowered/impl/world/CraftWorld.java
+          keep_file src/main/java/io/papermc/paper/registry/set/PaperRegistrySets.java
+
+          git fetch --no-tags https://github.com/slyphmp4/Cardboard.git 944000d2a13f1decccb55817484567f9d0dcc230
+          git cat-file -e 'FETCH_HEAD^{commit}'
+          git read-tree --reset -u FETCH_HEAD
+
+          restore_file() {
+            local path="$1"
+            mkdir -p "$(dirname "$path")"
+            cp "$KEEP/$path" "$path"
+          }
+
+          restore_file PORTING-26.3.md
+          restore_file .github/workflows/build.yml
+          restore_file .github/workflows/integrate-26.3-reference.yml
+          restore_file src/main/java/io/papermc/paper/world/PaperWorldClock.java
+          restore_file src/main/java/io/papermc/paper/registry/set/PaperRegistrySets.java
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          keep = Path("/tmp/cardboard-port-keep")
+          source = Path("src/main/java/org/cardboardpowered/impl/world/CraftWorld.java")
+          original = (keep / "src/main/java/org/cardboardpowered/impl/world/CraftWorld.java").read_text()
+          current = source.read_text()
+
+          start = "    @Override\n    public @org.jetbrains.annotations.Nullable io.papermc.paper.world.WorldClock getDefaultClock()"
+          end = "    @Override\n    public io.papermc.paper.world.chunk.ChunkGenerationState getChunkGenerationState(int x, int z)"
+          insertion = "    @Override\n    public void setFullTime(long time)"
+          if start not in original or end not in original:
+              raise SystemExit("Could not locate the preserved Paper WorldClock implementation")
+          if "getDefaultClock()" not in current:
+              block = original[original.index(start):original.index(end)]
+              if insertion not in current:
+                  raise SystemExit("Could not locate the CraftWorld time setter insertion point")
+              current = current.replace(insertion, block + "\n" + insertion, 1)
+              source.write_text(current)
+          PY
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          build = Path("build.gradle")
+          text = build.read_text()
+          old = "26.3.build.249-stable"
+          new = "26.3.build.256-stable"
+          if old not in text:
+              raise SystemExit("Expected Paper API 249 pin was not found in build.gradle")
+          build.write_text(text.replace(old, new))
+
+          properties = Path("gradle.properties")
+          text = properties.read_text()
+          text = text.replace("mod_version = 26.3.0", "mod_version = 26.3.0-dev.2")
+          text = text.replace("git_version_branch = ver/26.3", "git_version_branch = port/26.3-integration")
+          if "git_version_branch = port/26.3-integration" not in text:
+              raise SystemExit("Could not set the integration branch metadata")
+          properties.write_text(text)
+
+          ci = Path(".github/workflows/ci.yml")
+          text = ci.read_text()
+          needle = "      - ver/26.3"
+          if needle not in text:
+              raise SystemExit("Could not locate CI branch filters")
+          text = text.replace(needle, needle + "\n      - port/26.3-integration")
+          ci.write_text(text)
+
+          for path in Path(".").rglob("*"):
+              if not path.is_file() or ".git" in path.parts:
+                  continue
+              try:
+                  data = path.read_text()
+              except (UnicodeDecodeError, OSError):
+                  continue
+              if "26.3.build.249-stable" in data:
+                  path.write_text(data.replace("26.3.build.249-stable", "26.3.build.256-stable"))
+          PY
+
+          git status --short
+
+          VALIDATION_STATUS=0
+          ./gradlew clean build --no-daemon --max-workers=2 --stacktrace || VALIDATION_STATUS=$?
+          python3 -B -m unittest discover -s tools/ci/tests -v || VALIDATION_STATUS=$?
+          python3 -B -m unittest discover -s tools/reproducibility/tests -p 'test_*.py' -v || VALIDATION_STATUS=$?
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if ! git diff --cached --quiet; then
+            git commit -m "Integrate verified Minecraft 26.3 baseline and preserve Paper API 256"
+            git push origin HEAD:port/26.3-integration
+          fi
+
+          exit "$VALIDATION_STATUS"
