@@ -80,16 +80,31 @@ jobs:
           original = (keep / "src/main/java/org/cardboardpowered/impl/world/CraftWorld.java").read_text()
           current = source.read_text()
 
-          start = "    @Override\n    public @org.jetbrains.annotations.Nullable io.papermc.paper.world.WorldClock getDefaultClock()"
-          end = "    @Override\n    public io.papermc.paper.world.chunk.ChunkGenerationState getChunkGenerationState(int x, int z)"
-          insertion = "    public void setFullTime(long time)"
-          if start not in original or end not in original:
-              raise SystemExit("Could not locate the preserved Paper WorldClock implementation")
+          signature = "    public @org.jetbrains.annotations.Nullable io.papermc.paper.world.WorldClock getDefaultClock()"
+          start = original.find(signature)
+          if start < 0:
+              raise SystemExit("Could not locate the preserved getDefaultClock method")
+          brace = original.find("{", start)
+          if brace < 0:
+              raise SystemExit("Could not locate getDefaultClock method body")
+          depth = 0
+          method_end = None
+          for i in range(brace, len(original)):
+              if original[i] == "{":
+                  depth += 1
+              elif original[i] == "}":
+                  depth -= 1
+                  if depth == 0:
+                      method_end = i + 1
+                      break
+          if method_end is None:
+              raise SystemExit("Could not parse getDefaultClock method body")
+          method = original[start:method_end]
           if "getDefaultClock()" not in current:
-              block = original[original.index(start):original.index(end)]
+              insertion = "    public void setFullTime(long time)"
               if insertion not in current:
-                  raise SystemExit("Could not locate the CraftWorld setFullTime method insertion point")
-              current = current.replace(insertion, block + "\n" + insertion, 1)
+                  raise SystemExit("Could not locate CraftWorld insertion point")
+              current = current.replace(insertion, method + "\n\n" + insertion, 1)
               source.write_text(current)
           PY
 
