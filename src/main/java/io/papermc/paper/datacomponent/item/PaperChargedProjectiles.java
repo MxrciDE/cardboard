@@ -19,7 +19,7 @@ public record PaperChargedProjectiles(
 
     @Override
     public List<ItemStack> projectiles() {
-        return this.impl.itemCopies().map(CraftItemStack::asCraftMirror).toList();
+        return this.impl.itemCopies().map(stack -> (ItemStack) CraftItemStack.asCraftMirror(stack)).toList();
     }
 
     static final class BuilderImpl implements ChargedProjectiles.Builder {
