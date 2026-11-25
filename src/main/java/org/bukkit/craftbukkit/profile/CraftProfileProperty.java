@@ -9,13 +9,13 @@ import com.google.gson.JsonParser;
 import com.mojang.authlib.properties.Property;
 import com.mojang.authlib.services.ServicesKeySet;
 import com.mojang.authlib.services.ServicesKeyType;
-import net.minecraft.server.MinecraftServer;
+import com.mojang.authlib.services.MinecraftServicesDiscoveryService;
+import java.net.Proxy;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
-import org.bukkit.craftbukkit.CraftServer;
 import org.bukkit.craftbukkit.configuration.ConfigSerializationUtil;
 import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;
@@ -113,7 +113,7 @@ public final class CraftProfileProperty {
 
 	static {
 		try {
-			PUBLIC_KEYS = CraftServer.INSTANCE.getServer().services().servicesKeySet();
+			PUBLIC_KEYS = MinecraftServicesDiscoveryService.create(Proxy.NO_PROXY).getServicesKeySet();
 		} catch (Exception var1) {
 			throw new Error("Could not load yggdrasil_session_pubkey.der! This indicates a bug.");
 		}

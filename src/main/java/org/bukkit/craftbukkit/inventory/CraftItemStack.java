@@ -187,6 +187,22 @@ public final class CraftItemStack extends ItemStack {
 
     public net.minecraft.world.item.ItemStack handle;
 
+    @Override
+    public byte[] serializeAsBytes() {
+        Preconditions.checkArgument(!this.isEmpty(), "Empty item cannot be serialized");
+        CompoundTag compound = (CompoundTag) net.minecraft.world.item.ItemStack.CODEC.encodeStart(
+                CraftRegistry.getMinecraftRegistry().createSerializationContext(net.minecraft.nbt.NbtOps.INSTANCE),
+                this.handle).getOrThrow();
+        compound.putInt("DataVersion", net.minecraft.SharedConstants.getCurrentVersion().dataVersion().version());
+        try {
+            var output = new java.io.ByteArrayOutputStream();
+            net.minecraft.nbt.NbtIo.writeCompressed(compound, output);
+            return output.toByteArray();
+        } catch (java.io.IOException failure) {
+            throw new IllegalStateException("Could not serialize item", failure);
+        }
+    }
+
     /**
      * Mirror
      */
@@ -270,6 +286,70 @@ public final class CraftItemStack extends ItemStack {
     @Override
     public int getMaxStackSize() {
         return (this.handle == null) ? Item.DEFAULT_MAX_STACK_SIZE : this.handle.getMaxStackSize(); // Paper - air stacks to 64
+    }
+    @Override
+    public @NotNull Map<String, Object> serialize() {
+        if (this.isEmpty()) {
+            return Map.of(
+                    "id", "minecraft:air",
+                    net.minecraft.SharedConstants.DATA_VERSION_TAG,
+                    org.bukkit.Bukkit.getUnsafe().getDataVersion(),
+                    "schema_version", 1
+            );
+        }
+
+        final CompoundTag tag =
+                (CompoundTag) net.minecraft.world.item.ItemStack.CODEC.encodeStart(
+                        CraftRegistry.getMinecraftRegistry().createSerializationContext(
+                                net.minecraft.nbt.NbtOps.INSTANCE
+                        ),
+                        this.handle
+                ).getOrThrow();
+
+        net.minecraft.nbt.NbtUtils.addCurrentDataVersion(tag);
+
+        final Map<String, Object> result =
+                new java.util.LinkedHashMap<>();
+
+        tag.asCompound().get().forEach((key, value) -> {
+            switch (key) {
+                case "id" ->
+                        result.put("id", value.asString().get());
+
+                case "count" ->
+                        result.put("count", value.asInt().get());
+
+                case "components" -> {
+                    final Map<String, Object> components =
+                            new java.util.LinkedHashMap<>();
+
+                    value.asCompound().ifPresent(compound -> {
+                        compound.forEach((componentKey, componentTag) ->
+                                components.put(
+                                        componentKey,
+                                        componentTag.toString()
+                                )
+                        );
+                    });
+
+                    result.put("components", components);
+                }
+
+                case net.minecraft.SharedConstants.DATA_VERSION_TAG ->
+                        result.put(
+                                net.minecraft.SharedConstants.DATA_VERSION_TAG,
+                                value.asInt().get()
+                        );
+
+                default ->
+                        throw new IllegalStateException(
+                                "Unexpected value: " + key
+                        );
+            }
+        });
+
+        result.put("schema_version", 1);
+        return result;
     }
 
     @Override
@@ -449,6 +529,50 @@ public final class CraftItemStack extends ItemStack {
         // Paper - this is no longer needed
 
         return true;
+    }
+
+    @Override
+    public @NotNull String translationKey() {
+        if (this.handle == null) {
+            return net.minecraft.world.item.Items.AIR.getDescriptionId();
+        }
+        return this.handle.getItem().getDescriptionId();
+    }
+
+    @Override
+    public boolean isRepairableBy(@NotNull final ItemStack repairMaterial) {
+        if (this.handle == null) {
+            return false;
+        }
+        return this.handle.isValidRepairItem(CraftItemStack.unwrap(repairMaterial));
+    }
+
+    @Override
+    public @NotNull java.util.List<Component> computeTooltipLines(
+            final io.papermc.paper.inventory.tooltip.TooltipContext tooltipContext,
+            final org.bukkit.entity.Player player) {
+        Preconditions.checkArgument(tooltipContext != null, "tooltipContext cannot be null");
+        net.minecraft.world.item.ItemStack item =
+                this.handle == null ? net.minecraft.world.item.ItemStack.EMPTY : this.handle;
+        net.minecraft.world.item.TooltipFlag.Default flag =
+                tooltipContext.isAdvanced()
+                        ? net.minecraft.world.item.TooltipFlag.ADVANCED
+                        : net.minecraft.world.item.TooltipFlag.NORMAL;
+        if (tooltipContext.isCreative()) {
+            flag = flag.asCreative();
+        }
+
+        final java.util.List<net.minecraft.network.chat.Component> lines = item.getTooltipLines(
+                net.minecraft.world.item.Item.TooltipContext.of(
+                        player == null
+                                ? CraftRegistry.getMinecraftRegistry()
+                                : ((org.bukkit.craftbukkit.entity.CraftPlayer) player)
+                                        .getHandle().level().registryAccess()),
+                player == null
+                        ? null
+                        : ((org.bukkit.craftbukkit.entity.CraftPlayer) player).getHandle(),
+                flag);
+        return lines.stream().map(PaperAdventure::asAdventure).toList();
     }
 
     @Override

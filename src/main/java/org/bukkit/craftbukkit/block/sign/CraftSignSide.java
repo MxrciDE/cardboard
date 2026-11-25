@@ -3,7 +3,9 @@ package org.bukkit.craftbukkit.block.sign;
 import java.util.List;
 import net.kyori.adventure.text.Component;
 import net.minecraft.world.level.block.entity.SignText;
+import net.minecraft.world.level.block.entity.SignTextSlot;
 import org.bukkit.DyeColor;
+import org.bukkit.block.sign.Side;
 import org.bukkit.block.sign.SignSide;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -90,26 +92,32 @@ public class CraftSignSide implements SignSide {
 
     public SignText applyLegacyStringToSignSide() {
         if (this.lines != null) {
+            SignText.Mutable signTextMutable = this.signText.asMutable();
             for (int i = 0; i < this.lines.size(); ++i) {
                 net.kyori.adventure.text.Component component = this.lines.get(i);
                 net.kyori.adventure.text.Component origComp = this.originalLines.get(i);
                 if (component.equals(origComp)) {
                     continue; // The line contents are still the same, skip.
                 }
-                SignText.Mutable mutable = this.signText.asMutable();
-                mutable.setLine(i, io.papermc.paper.adventure.PaperAdventure.asVanilla(component));
-                this.signText = mutable.asImmutable();
+                signTextMutable.setLine(i, io.papermc.paper.adventure.PaperAdventure.asVanilla(component));
             }
+            this.signText = signTextMutable.asImmutable();
         }
 
         return this.signText;
     }
-    public static org.bukkit.block.sign.Side fromVanilla(net.minecraft.world.level.block.entity.SignTextSlot slot) {
-        return slot == net.minecraft.world.level.block.entity.SignTextSlot.FRONT ? org.bukkit.block.sign.Side.FRONT : org.bukkit.block.sign.Side.BACK;
+
+    public static Side fromVanilla(SignTextSlot slot) {
+        return switch (slot) {
+            case FRONT -> Side.FRONT;
+            case BACK -> Side.BACK;
+        };
     }
 
-    public static net.minecraft.world.level.block.entity.SignTextSlot toVanilla(org.bukkit.block.sign.Side side) {
-        return side == org.bukkit.block.sign.Side.FRONT ? net.minecraft.world.level.block.entity.SignTextSlot.FRONT : net.minecraft.world.level.block.entity.SignTextSlot.BACK;
+    public static SignTextSlot toVanilla(Side side) {
+        return switch (side) {
+            case FRONT -> SignTextSlot.FRONT;
+            case BACK -> SignTextSlot.BACK;
+        };
     }
 }
-

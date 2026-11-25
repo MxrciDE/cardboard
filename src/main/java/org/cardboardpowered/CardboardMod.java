@@ -42,8 +42,11 @@ import org.cardboardpowered.bridge.world.entity.EntityBridge;
 import org.cardboardpowered.bridge.server.level.ServerPlayerBridge;
 import org.cardboardpowered.bridge.world.level.LevelBridge;
 import org.cardboardpowered.library.LibraryManager;
+import org.cardboardpowered.mohistremap.RemapUtilProvider;
+import org.cardboardpowered.util.nms.RemapUtils;
 
 import io.papermc.paper.plugin.PluginInitializerManager;
+import io.papermc.paper.plugin.entrypoint.LaunchEntryPointHandler;
 import joptsimple.OptionSet;
 import me.isaiah.common.event.EventHandler;
 import me.isaiah.common.event.EventRegistery;
@@ -134,10 +137,22 @@ public class CardboardMod implements ModInitializer {
         }
 
         CardboardEventManager.INSTANCE.callCardboardEvents();
-        
+
+        // Paper plugin bootstrappers can load classes while providers are scanned.
+        // Make Cardboard's remapper available before PluginInitializerManager runs.
+        RemapUtils remapUtil = new RemapUtils();
+        RemapUtilProvider.setInstance(remapUtil);
+        remapUtil.init();
+
         System.out.println("loading PluginInitializerManager");
+        if (options == null) {
+            options = org.cardboardpowered.util.CardboardOptions.parse(new String[0]);
+        }
         try {
 			PluginInitializerManager.load(options);
+			// Paper plugins can declare a bootstrapper in paper-plugin.yml. Run it
+			// after provider discovery and before the normal plugin entrypoint.
+			LaunchEntryPointHandler.enterBootstrappers();
 		} catch (Exception e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
@@ -178,15 +193,6 @@ public class CardboardMod implements ModInitializer {
     public static void on_world_init_mc(ServerLevel nms) {
         // Check if Server is null
         if (null == CraftServer.INSTANCE) {
-            MinecraftServer mc = nms.getServer();
-            if (!mc.isDedicatedServer()) {
-                LOGGER.info("----------------------------------------");
-                LOGGER.info("Cardboard currently only supports the Dedicated Server.");
-                LOGGER.info("(Although Pull Requests to add support are Welcome :) )");
-                LOGGER.info("Server will now shutdown");
-                LOGGER.info("----------------------------------------");
-                mc.halt(true);
-            }
             return;
         }
 

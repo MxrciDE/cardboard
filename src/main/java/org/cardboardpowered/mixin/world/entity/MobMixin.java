@@ -3,6 +3,7 @@ package org.cardboardpowered.mixin.world.entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.ai.goal.GoalSelector;
 import net.minecraft.world.level.Level;
 import org.bukkit.event.entity.EntityTargetEvent;
 import org.cardboardpowered.bridge.world.entity.MobBridge;
@@ -12,7 +13,6 @@ import org.cardboardpowered.bridge.server.level.ServerLevelBridge;
 import org.jspecify.annotations.Nullable;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
-import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -24,45 +24,85 @@ public abstract class MobMixin extends LivingEntity implements MobBridge, Entity
     public LivingEntity target;
 
     @Shadow
-    public abstract @Nullable LivingEntity getTarget();
+    protected GoalSelector goalSelector;
+
+    @Shadow
+    protected GoalSelector targetSelector;
+
+
+    @Shadow
+    public abstract @Nullable LivingEntity getTargetUnchecked();
+
+    @Shadow
+    protected abstract @Nullable LivingEntity asValidTarget(@Nullable LivingEntity target);
 
     protected MobMixin(EntityType<? extends LivingEntity> entityType, Level level) {
         super(entityType, level);
     }
 
-    @Inject(method = "setTarget", at = @At("HEAD"), cancellable = true)
-    public void setTargetCraftBukkit(LivingEntity livingEntity, CallbackInfo ci) {
-        // CraftBukkit start - fire event
-        boolean set = this.cardboard$setTarget(target, EntityTargetEvent.TargetReason.UNKNOWN);
-        if (set) { // Let the other mods call their @Inject if set is false.
-            ci.cancel();
+    @Override
+    public GoalSelector cardboard$getGoalSelector() {
+        return this.goalSelector;
+    }
+
+    @Override
+    public GoalSelector cardboard$getTargetSelector() {
+        return this.targetSelector;
+    }
+
+    @org.spongepowered.asm.mixin.Unique
+    private EntityTargetEvent.@Nullable TargetReason cardboard$pendingTargetReason;
+
+    @Override
+    public void cardboard$setTargetWithReason(@Nullable LivingEntity target, EntityTargetEvent.TargetReason reason) {
+        EntityTargetEvent.TargetReason previous = this.cardboard$pendingTargetReason;
+        this.cardboard$pendingTargetReason = reason;
+        try {
+            ((Mob) (Object) this).setTarget(target);
+        } finally {
+            this.cardboard$pendingTargetReason = previous;
         }
     }
 
-    @Unique
-    private static final java.util.concurrent.atomic.AtomicBoolean cardboard$warnedUnknownTarget =
-            new java.util.concurrent.atomic.AtomicBoolean(false);
+    @Inject(method = "setTarget(Lnet/minecraft/world/entity/LivingEntity;)V", at = @At("HEAD"), cancellable = true)
+    public void setTargetCraftBukkit(LivingEntity livingEntity, CallbackInfo ci) {
+        if (this.level().isClientSide()) {
+            return;
+        }
+        EntityTargetEvent.TargetReason reason = this.cardboard$pendingTargetReason;
+        this.cardboard$pendingTargetReason = null;
+        if (this.getTargetUnchecked() == livingEntity) {
+            // Vanilla must still reject a current target that has become invalid.
+            return;
+        }
+        this.cardboard$setTarget(livingEntity, reason == null ? EntityTargetEvent.TargetReason.UNKNOWN : reason);
+        // A cancelled Bukkit event must not fall through to vanilla's target assignment.
+        ci.cancel();
+    }
 
     @Override
     public boolean cardboard$setTarget(@Nullable LivingEntity target, EntityTargetEvent.@Nullable TargetReason reason) {
-        if (this.getTarget() == target) {
+        LivingEntity oldTarget = this.getTargetUnchecked();
+        if (oldTarget == target) {
             return false;
         }
+        if (this.level().isClientSide()) {
+            ((Mob) (Object) this).setTarget(target);
+            return this.getTargetUnchecked() != oldTarget;
+        }
         if (reason != null) {
-            if (reason == EntityTargetEvent.TargetReason.UNKNOWN && this.getTarget() != null && target == null) {
-                reason = this.getTarget().isAlive() ? EntityTargetEvent.TargetReason.FORGOT_TARGET : EntityTargetEvent.TargetReason.TARGET_DIED;
+            if (reason == EntityTargetEvent.TargetReason.UNKNOWN && oldTarget != null && target == null) {
+                reason = oldTarget.isAlive() ? EntityTargetEvent.TargetReason.FORGOT_TARGET : EntityTargetEvent.TargetReason.TARGET_DIED;
             }
-            if (reason == EntityTargetEvent.TargetReason.UNKNOWN && cardboard$warnedUnknownTarget.compareAndSet(false, true)) {
-                // Fires on every generic setTarget call, i.e. constantly once mobs are active.
-                // Report it once per run so the signal survives without flooding the log.
-                ((ServerLevelBridge)this.level()).getCraftServer().getLogger().log(java.util.logging.Level.WARNING,
-                        "Unknown target reason, please report on the issue tracker (further occurrences suppressed)", new Exception());
+            if (reason == EntityTargetEvent.TargetReason.UNKNOWN) {
+                cardboard$warnUnknownTargetReason(target);
             }
             CraftLivingEntity ctarget = null;
             if (target != null) {
                 ctarget = (CraftLivingEntity) target.getBukkitEntity();
             }
-            org.bukkit.event.entity.EntityTargetLivingEntityEvent event = new org.bukkit.event.entity.EntityTargetLivingEntityEvent(this.getBukkitEntity(), ctarget, reason);
+            org.bukkit.event.entity.EntityTargetLivingEntityEvent event =
+                    new org.bukkit.event.entity.EntityTargetLivingEntityEvent(this.getBukkitEntity(), ctarget, reason);
             if (!event.callEvent()) {
                 return false;
             }
@@ -73,8 +113,49 @@ public abstract class MobMixin extends LivingEntity implements MobBridge, Entity
                 target = null;
             }
         }
-        this.target = target;
+        this.target = this.asValidTarget(target);
         return true;
-        // CraftBukkit end
+    }
+
+    @org.spongepowered.asm.mixin.Unique
+    private static final java.util.Set<String> cardboard$reportedUnknownTargetSites =
+            java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+    @org.spongepowered.asm.mixin.Unique
+    private void cardboard$warnUnknownTargetReason(@Nullable LivingEntity newTarget) {
+        java.util.List<StackWalker.StackFrame> callers = StackWalker.getInstance().walk(frames -> frames
+                .dropWhile(frame -> frame.getMethodName().startsWith("cardboard$")
+                        || frame.getMethodName().equals("setTargetCraftBukkit")
+                        || frame.getMethodName().equals("setTarget"))
+                .limit(4)
+                .collect(java.util.stream.Collectors.toList()));
+
+        String mobType = EntityType.getKey(this.getType()).toString();
+        String callSite = callers.isEmpty() ? "unknown" : callers.get(0).toString();
+        if (!cardboard$reportedUnknownTargetSites.add(mobType + '@' + callSite)) {
+            return;
+        }
+
+        StringBuilder message = new StringBuilder()
+                .append("Unknown EntityTargetEvent.TargetReason for ").append(mobType)
+                .append(" (uuid=").append(this.getUUID())
+                .append(", world=").append(this.level().dimension().identifier())
+                .append(", pos=").append(this.blockPosition().toShortString())
+                .append("), old target=").append(cardboard$describeTarget(this.getTargetUnchecked()))
+                .append(", new target=").append(cardboard$describeTarget(newTarget))
+                .append("\n  called from:");
+        for (StackWalker.StackFrame frame : callers) {
+            message.append("\n    ").append(frame);
+        }
+        message.append("\n  Only the first occurrence per mob type and call site is logged.")
+                .append(" Please report this on the Cardboard issue tracker.");
+
+        ((ServerLevelBridge) this.level()).getCraftServer().getLogger()
+                .log(java.util.logging.Level.WARNING, message.toString());
+    }
+
+    @org.spongepowered.asm.mixin.Unique
+    private static String cardboard$describeTarget(@Nullable LivingEntity entity) {
+        return entity == null ? "none" : EntityType.getKey(entity.getType()) + "/" + entity.getUUID();
     }
 }

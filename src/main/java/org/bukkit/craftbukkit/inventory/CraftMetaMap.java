@@ -50,7 +50,6 @@ class CraftMetaMap extends CraftMetaItem implements MapMeta {
         getOrEmpty(tag, CraftMetaMap.MAP_POST_PROCESSING).ifPresent((mapPostProcessing) -> {
             this.scaling = (mapPostProcessing == MapPostProcessing.SCALE) ? CraftMetaMap.SCALING_TRUE : CraftMetaMap.SCALING_FALSE;
         });
-
     }
 
     CraftMetaMap(Map<String, Object> map) {
@@ -70,7 +69,6 @@ class CraftMetaMap extends CraftMetaItem implements MapMeta {
         if (locName != null) {
             this.setLocationName(locName);
         }
-
     }
 
     @Override
@@ -84,7 +82,6 @@ class CraftMetaMap extends CraftMetaItem implements MapMeta {
         if (this.hasScaling()) {
             tag.put(CraftMetaMap.MAP_POST_PROCESSING, (this.isScaling()) ? MapPostProcessing.SCALE : MapPostProcessing.LOCK);
         }
-
     }
 
     @Override
@@ -93,7 +90,7 @@ class CraftMetaMap extends CraftMetaItem implements MapMeta {
     }
 
     boolean isMapEmpty() {
-        return !(this.hasMapId() || this.hasScaling() || this.hasLocationName());
+        return !(this.hasMapId() || this.hasScaling());
     }
 
     @Override
@@ -143,30 +140,13 @@ class CraftMetaMap extends CraftMetaItem implements MapMeta {
     }
 
     @Override
-    public boolean hasLocationName() {
-        return this.hasLocalizedName(); // SPIGOT-6308
-    }
-
-    @Override
-    public String getLocationName() {
-        return this.getLocalizedName(); // SPIGOT-6308
-    }
-
-    @Override
-    public void setLocationName(String name) {
-        this.setLocalizedName(name); // SPIGOT-6308
-    }
-
-
-    @Override
     boolean equalsCommon(CraftMetaItem meta) {
         if (!super.equalsCommon(meta)) {
             return false;
         }
         if (meta instanceof final CraftMetaMap other) {
             return this.scaling == other.scaling
-                    && Objects.equals(this.mapId, other.mapId)
-;
+                    && Objects.equals(this.mapId, other.mapId);
         }
         return true;
     }
@@ -208,7 +188,6 @@ class CraftMetaMap extends CraftMetaItem implements MapMeta {
         if (this.hasScaling()) {
             builder.put(CraftMetaMap.MAP_SCALING.BUKKIT, this.isScaling());
         }
-
 
         return builder;
     }

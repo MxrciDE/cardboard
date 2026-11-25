@@ -43,6 +43,7 @@ import org.bukkit.util.Vector;
 import com.destroystokyo.paper.block.TargetBlockInfo;
 import com.destroystokyo.paper.block.TargetBlockInfo.FluidMode;
 import com.destroystokyo.paper.entity.TargetEntityInfo;
+import com.google.common.base.Preconditions;
 import com.google.common.collect.Sets;
 import com.javazilla.bukkitfabric.Utils;
 
@@ -85,6 +86,7 @@ import net.minecraft.world.waypoints.WaypointStyleAsset;
 import net.minecraft.world.waypoints.WaypointStyleAssets;
 
 import org.bukkit.entity.*;
+import org.bukkit.craftbukkit.potion.CraftPotionEffectType;
 import org.bukkit.craftbukkit.potion.CraftPotionUtil;
 import org.bukkit.craftbukkit.inventory.CraftEntityEquipment;
 import org.cardboardpowered.impl.world.CraftWorld;
@@ -200,19 +202,13 @@ public class CraftLivingEntity extends CraftEntity implements LivingEntity {
 
     @Override
     public boolean addPotionEffect(PotionEffect effect) {
-        return addPotionEffect(effect, false);
+        return this.getHandle().addEffect(CraftPotionUtil.fromBukkit(effect));
     }
 
     @Override
     public boolean addPotionEffect(PotionEffect effect, boolean force) {
-        MobEffect type = BuiltInRegistries.MOB_EFFECT.byId(effect.getType().getId());
-
-        me.isaiah.common.cmixin.IMixinEntity ic = ((me.isaiah.common.cmixin.IMixinEntity)(Object) entity);
-        ic.IC$add_status_effect(type, effect.getDuration(), effect.getAmplifier(), effect.isAmbient(), effect.hasParticles());
-        
-        // nms.addStatusEffect(new StatusEffectInstance(type, effect.getDuration(), effect.getAmplifier(), effect.isAmbient(), effect.hasParticles())/*, EntityPotionEffectEvent.Cause.PLUGIN*/);
-
-        return true;
+        // The deprecated force argument is ignored by Paper as well.
+        return addPotionEffect(effect);
     }
 
     @Override
@@ -231,10 +227,8 @@ public class CraftLivingEntity extends CraftEntity implements LivingEntity {
     @Override
     public Collection<PotionEffect> getActivePotionEffects() {
         List<PotionEffect> effects = new ArrayList<>();
-        for (MobEffectInstance handle :  this.getHandle().activeEffects.values()) {
-                // effects.add(new PotionEffect(PotionEffectType.getById(Registries.STATUS_EFFECT.getRawId(handle.getEffectType())), handle.getDuration(), handle.getAmplifier(), handle.isAmbient(), handle.shouldShowParticles()));
-                effects.add(CraftPotionUtil.toBukkit(handle));
-        
+        for (MobEffectInstance handle : this.getHandle().getActiveEffects()) {
+            effects.add(CraftPotionUtil.toBukkit(handle));
         }
         return effects;
     }
@@ -244,7 +238,7 @@ public class CraftLivingEntity extends CraftEntity implements LivingEntity {
         if (getHandle() instanceof Mob) {
             return ((Mob) getHandle()).canPickUpLoot();
         }
-        return true; // todo
+        return ((LivingEntityBridge) this.getHandle()).cardboard$getBukkitPickUpLoot();
     }
 
     @Override
@@ -334,18 +328,13 @@ public class CraftLivingEntity extends CraftEntity implements LivingEntity {
 
     @Override
     public int getNoDamageTicks() {
-        return this.getHandle().damageCooldownTime;
+        return ((org.cardboardpowered.bridge.world.entity.LivingEntityBridge) this.getHandle()).cardboard$getDamageCooldownTime();
     }
 
     @Override
     public PotionEffect getPotionEffect(PotionEffectType arg0) {
-    	
-    	me.isaiah.common.cmixin.IMixinEntity ic = ((me.isaiah.common.cmixin.IMixinEntity)(Object) entity);
-
-    	MobEffectInstance handle = ic.IC$get_status_effect(arg0.getId());
-    	
-    	int typeId = ic.IC$get_status_effect_id(handle);
-        return (handle == null) ? null : new PotionEffect(PotionEffectType.getById(typeId), handle.getDuration(), handle.getAmplifier(), handle.isAmbient(), handle.isVisible());
+        MobEffectInstance handle = this.getHandle().getEffect(CraftPotionEffectType.bukkitToMinecraftHolder(arg0));
+        return handle == null ? null : CraftPotionUtil.toBukkit(handle);
     }
 
     @Override
@@ -388,9 +377,7 @@ public class CraftLivingEntity extends CraftEntity implements LivingEntity {
 
     @Override
     public boolean hasPotionEffect(PotionEffectType arg0) {
-    	me.isaiah.common.cmixin.IMixinEntity ic = ((me.isaiah.common.cmixin.IMixinEntity)(Object) entity);
-    	return ic.IC$has_status_effect(BuiltInRegistries.MOB_EFFECT.byId(arg0.getId()));
-        // return nms.hasStatusEffect(Registries.STATUS_EFFECT.get(arg0.getId()));
+        return this.getHandle().hasEffect(CraftPotionEffectType.bukkitToMinecraftHolder(arg0));
     }
 
     @Override
@@ -401,8 +388,7 @@ public class CraftLivingEntity extends CraftEntity implements LivingEntity {
 
     @Override
     public boolean isGliding() {
-        // TODO Auto-generated method stub
-        return false;
+        return this.getHandle().isFallFlying();
     }
 
     @Override
@@ -441,11 +427,7 @@ public class CraftLivingEntity extends CraftEntity implements LivingEntity {
 
     @Override
     public void removePotionEffect(PotionEffectType type) {
-    	me.isaiah.common.cmixin.IMixinEntity ic = ((me.isaiah.common.cmixin.IMixinEntity)(Object) entity);
-    	
-    	ic.IC$remove_status_effect( BuiltInRegistries.MOB_EFFECT.byId(type.getId()) );
-    	
-        //nms.removeStatusEffect(Registries.STATUS_EFFECT.get(type.getId())/*, EntityPotionEffectEvent.Cause.PLUGIN*/);
+        this.getHandle().removeEffect(CraftPotionEffectType.bukkitToMinecraftHolder(type));
     }
 
     @Override
@@ -456,7 +438,11 @@ public class CraftLivingEntity extends CraftEntity implements LivingEntity {
 
     @Override
     public void setCanPickupItems(boolean arg0) {
-        // TODO Auto-generated method stub
+        if (this.getHandle() instanceof Mob mob) {
+            mob.setCanPickUpLoot(arg0);
+        } else {
+            ((LivingEntityBridge) this.getHandle()).cardboard$setBukkitPickUpLoot(arg0);
+        }
     }
 
     @Override
@@ -517,7 +503,7 @@ public class CraftLivingEntity extends CraftEntity implements LivingEntity {
 
     @Override
     public void setNoDamageTicks(int arg0) {
-        // TODO Auto-generated method stub
+        ((org.cardboardpowered.bridge.world.entity.LivingEntityBridge) this.getHandle()).cardboard$setDamageCooldownTime(arg0);
     }
 
     @Override
@@ -535,35 +521,14 @@ public class CraftLivingEntity extends CraftEntity implements LivingEntity {
         entity.setSwimming(arg0);
     }
 
-    public boolean isPersistenceRequired() {
-        return this.getHandle() instanceof net.minecraft.world.entity.Mob mob && mob.isPersistenceRequired();
-    }
-
-    public void setPersistenceRequired(boolean persistent) {
-        if (this.getHandle() instanceof net.minecraft.world.entity.Mob mob) {
-            mob.persistenceRequired = persistent;
-        }
-    }
-
-    @Override
-    public void swingHand(org.bukkit.inventory.EquipmentSlot hand, io.papermc.paper.datacomponent.item.SwingAnimation swingAnimation) {
-        this.getHandle().swing(CraftEquipmentSlot.getHand(hand), ((io.papermc.paper.datacomponent.item.PaperSwingAnimation) swingAnimation).getHandle(), true);
-    }
-
-    private net.minecraft.world.item.component.SwingAnimation getSwingAnimation(InteractionHand hand) {
-        net.minecraft.world.item.component.SwingAnimation animation = this.getHandle().getItemInHand(hand)
-            .get(net.minecraft.core.component.DataComponents.ATTACK_ANIMATION);
-        return animation != null ? animation : net.minecraft.world.item.component.SwingAnimation.DEFAULT;
-    }
-
     @Override
     public void swingMainHand() {
-        this.getHandle().swing(InteractionHand.MAIN_HAND, getSwingAnimation(InteractionHand.MAIN_HAND), true);
+        this.getHandle().swing(InteractionHand.MAIN_HAND, this.cardboard$getSwingAnimation(InteractionHand.MAIN_HAND), true);
     }
 
     @Override
     public void swingOffHand() {
-        this.getHandle().swing(InteractionHand.OFF_HAND, getSwingAnimation(InteractionHand.OFF_HAND), true);
+        this.getHandle().swing(InteractionHand.OFF_HAND, this.cardboard$getSwingAnimation(InteractionHand.OFF_HAND), true);
     }
 
     @Override
@@ -1030,9 +995,15 @@ public class CraftLivingEntity extends CraftEntity implements LivingEntity {
 	}
 
 	@Override
-	public void knockback(double arg0, double arg1, double arg2) {
-		 // 26.2: LivingEntity#knockback(double,double,double) was removed
-		 this.getHandle().push(arg0, arg1, arg2);
+	public void knockback(double strength, double directionX, double directionZ) {
+		Preconditions.checkArgument(strength > 0, "Knockback strength must be > 0");
+		this.getHandle().knockback(
+				strength,
+				directionX,
+				directionZ,
+				this.getHandle().damageSources().generic(),
+				0.0F
+		);
 	}
 	
 	// 1.19.4:
@@ -1088,8 +1059,7 @@ public class CraftLivingEntity extends CraftEntity implements LivingEntity {
 
 	@Override
 	public boolean clearActivePotionEffects() {
-		// TODO Auto-generated method stub
-		return false;
+		return this.getHandle().removeAllEffects();
 	}
 
 	@Override
@@ -1293,4 +1263,17 @@ public class CraftLivingEntity extends CraftEntity implements LivingEntity {
         this.getHandle().die(((CraftDamageSource) damageSource).getHandle());
     }
 
+
+    private net.minecraft.world.item.component.SwingAnimation cardboard$getSwingAnimation(InteractionHand hand) {
+        return this.getHandle().getItemInHand(hand).getOrDefault(
+                net.minecraft.core.component.DataComponents.ATTACK_ANIMATION,
+                net.minecraft.world.item.component.SwingAnimation.DEFAULT);
+    }
+
+    @Override
+    public void swingHand(org.bukkit.inventory.EquipmentSlot hand, io.papermc.paper.datacomponent.item.SwingAnimation animation) {
+        Preconditions.checkArgument(animation != null, "swingAnimation cannot be null");
+        this.getHandle().swing(org.bukkit.craftbukkit.CraftEquipmentSlot.getHand(hand),
+                ((io.papermc.paper.datacomponent.item.PaperSwingAnimation) animation).getHandle(), true);
+    }
 }

@@ -5,8 +5,11 @@ import java.util.UUID;
 import java.util.concurrent.Executor;
 
 import net.minecraft.world.level.storage.LevelData;
+import org.bukkit.Bukkit;
 import org.bukkit.craftbukkit.CraftServer;
+import org.bukkit.event.entity.ProjectileLaunchEvent;
 import org.cardboardpowered.CardboardConfig;
+import org.cardboardpowered.bridge.world.entity.EntityBridge;
 import org.cardboardpowered.bridge.world.level.storage.LevelData_RespawnDataBridge;
 import org.cardboardpowered.bridge.world.level.storage.PrimaryLevelDataBridge;
 import org.cardboardpowered.impl.world.CraftWorld;
@@ -15,9 +18,14 @@ import org.cardboardpowered.mixin.world.level.LevelMixin;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+import org.cardboardpowered.bridge.world.level.saveddata.maps.MapItemSavedDataBridge;
+import net.minecraft.world.level.saveddata.maps.MapId;
+import net.minecraft.world.level.saveddata.maps.MapItemSavedData;
 
 import org.cardboardpowered.CardboardMod;
 import com.javazilla.bukkitfabric.Utils;
@@ -25,10 +33,10 @@ import org.cardboardpowered.bridge.world.level.LevelBridge;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.server.level.progress.LevelLoadListener;
 import net.minecraft.server.level.progress.LoggingLevelLoadListener;
 import net.minecraft.util.ProgressListener;
-import net.minecraft.world.RandomSequences;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.CustomSpawner;
 import net.minecraft.world.level.Level;
@@ -40,6 +48,12 @@ import net.minecraft.world.level.storage.ServerLevelData;
 
 @Mixin(ServerLevel.class)
 public class ServerLevelMixin extends LevelMixin implements ServerLevelBridge {
+
+    /** The Paper NMS lookup used by plugins must not load missing chunks. */
+    @Unique
+    public LevelChunk getChunkIfLoaded(int x, int z) {
+        return ((ServerLevel) (Object) this).getChunkSource().getChunkNow(x, z);
+    }
 
    // @Shadow
    // public boolean inEntityTick;
@@ -73,6 +87,36 @@ public class ServerLevelMixin extends LevelMixin implements ServerLevelBridge {
         
         // TODO: add ServerWorld argument to LoggingChunkLoadProgress constructor
         this.cardboard$levelLoadListener = new LoggingLevelLoadListener(false);
+    }
+
+    @Inject(method = "addFreshEntity", at = @At("HEAD"), cancellable = true)
+    private void cardboard$projectileLaunchEvent(Entity entity, CallbackInfoReturnable<Boolean> cir) {
+        if (!(((EntityBridge) entity).getBukkitEntity() instanceof org.bukkit.entity.Projectile projectile)) {
+            return;
+        }
+
+        ProjectileLaunchEvent event = new ProjectileLaunchEvent(projectile);
+        Bukkit.getPluginManager().callEvent(event);
+        if (event.isCancelled()) {
+            cir.setReturnValue(false);
+        }
+    }
+
+    /**
+     * Vanilla stores the map id in the saved-data key, not on the data object, but the
+     * Bukkit MapView API exposes it. Stamp it on wherever map data enters or leaves the world.
+     */
+    @Inject(at = @At("RETURN"), method = "getMapData")
+    public void cardboard$stampMapId(MapId id, CallbackInfoReturnable<MapItemSavedData> cir) {
+        MapItemSavedData data = cir.getReturnValue();
+        if (data != null) {
+            ((MapItemSavedDataBridge) data).setMapIdBF(id.id());
+        }
+    }
+
+    @Inject(at = @At("HEAD"), method = "setMapData")
+    public void cardboard$stampMapIdOnStore(MapId id, MapItemSavedData data, CallbackInfo ci) {
+        ((MapItemSavedDataBridge) data).setMapIdBF(id.id());
     }
 
     @Inject(at = @At("HEAD"), method = "save")

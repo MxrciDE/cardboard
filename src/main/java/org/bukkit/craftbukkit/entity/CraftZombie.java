@@ -49,7 +49,7 @@ public class CraftZombie extends CraftMonster implements Zombie {
 
     @Override
     public boolean isConverting() {
-        return this.getHandle().drowningTracker.isConverting();
+        return this.getHandle().isUnderWaterConverting();
     }
 
     @Override

@@ -177,6 +177,13 @@ public abstract class MinecraftServerMixin extends ReentrantBlockableEventLoop<T
         return false;
     }
 
+    private boolean cardboard$isIteratingOverLevels;
+
+    @Override
+    public boolean cardboard$isIteratingOverLevels() {
+        return this.cardboard$isIteratingOverLevels;
+    }
+
     @TransformAccess(Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC)
     private static MinecraftServer getServer() {
         return (MinecraftServer) (Object) CraftServer.server;
@@ -484,8 +491,21 @@ public abstract class MinecraftServerMixin extends ReentrantBlockableEventLoop<T
     }
 
     @Inject(at = @At("HEAD"), method = "tickChildren")
+    private void cardboard$beginWorldTickPhase(BooleanSupplier b, CallbackInfo ci) {
+        this.cardboard$isIteratingOverLevels = true;
+    }
+
+    @Inject(at = @At("RETURN"), method = "tickChildren")
+    private void cardboard$endWorldTickPhase(BooleanSupplier b, CallbackInfo ci) {
+        this.cardboard$isIteratingOverLevels = false;
+    }
+
+    @Inject(at = @At("HEAD"), method = "tickChildren")
     public void doBukkitRunnables(BooleanSupplier b, CallbackInfo ci) {
         ((CraftScheduler)CraftServer.INSTANCE.getScheduler()).mainThreadHeartbeat(tickCount);
+
+        ((io.papermc.paper.threadedregions.scheduler.FoliaGlobalRegionScheduler)
+                CraftServer.INSTANCE.getGlobalRegionScheduler()).tick();
         while (!processQueue.isEmpty())
             processQueue.remove().run();
     }
@@ -497,6 +517,19 @@ public abstract class MinecraftServerMixin extends ReentrantBlockableEventLoop<T
     }
 
     private boolean hasStopped = false;
+    @Unique private org.cardboardpowered.impl.util.ServerRestart cardboard$restartController;
+
+    @Override
+    public void cardboard$setRestartController(org.cardboardpowered.impl.util.ServerRestart controller) {
+        this.cardboard$restartController = controller;
+    }
+
+    @Inject(at = @At("RETURN"), method = "stopServer")
+    private void cardboard$afterStop(CallbackInfo ci) {
+        io.papermc.paper.adventure.providers.ClickCallbackProviderImpl.clearForServerStop();
+        if (this.cardboard$restartController != null) this.cardboard$restartController.afterStop();
+    }
+
     private final Object stopLock = new Object();
     public final boolean hasStopped() {
         synchronized (stopLock) {
@@ -510,6 +543,8 @@ public abstract class MinecraftServerMixin extends ReentrantBlockableEventLoop<T
             if (hasStopped) return;
             hasStopped = true;
         }
+
+        io.papermc.paper.connection.PaperConfigurationTask.cancelAll((MinecraftServer) (Object) this);
 
         if (null != CraftServer.INSTANCE)
             CraftServer.INSTANCE.getPluginManager().disablePlugins();
@@ -671,7 +706,10 @@ public abstract class MinecraftServerMixin extends ReentrantBlockableEventLoop<T
               biomeProvider */
            );
            this.worldData = serverLevelData.data();
-           this.worldData.setGameType(((DedicatedServer)(Object)this).getProperties().gameMode.get());
+           // Singleplayer worlds keep the game mode stored in their level data.
+           if ((Object)this instanceof DedicatedServer dedicated) {
+               this.worldData.setGameType(dedicated.getProperties().gameMode.get());
+           }
            // DimensionDataStorage dataStorage = serverLevel.getDataStorage();
 
            this.getServer().getScoreboard().load(((ScoreboardSaveData)savedDataStorage.computeIfAbsent(ScoreboardSaveData.TYPE)).getData());
@@ -757,3 +795,4 @@ public abstract class MinecraftServerMixin extends ReentrantBlockableEventLoop<T
         cir.setReturnValue(level != null ? level : this.overworld());
     }
 }
+

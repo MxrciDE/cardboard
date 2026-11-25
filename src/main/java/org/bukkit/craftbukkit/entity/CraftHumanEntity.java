@@ -32,8 +32,7 @@ import net.minecraft.world.inventory.MerchantMenu;
 import net.minecraft.world.item.ItemCooldowns;
 import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.item.crafting.RecipeManager;
-import net.minecraft.world.attribute.BedRule;
-import net.minecraft.world.level.block.AbstractBedBlock;
+import net.minecraft.world.level.block.BedBlock;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
@@ -202,17 +201,17 @@ public class CraftHumanEntity extends CraftLivingEntity implements HumanEntity {
 
         BlockPos pos = CraftLocation.toBlockPosition(location);
         BlockState state = this.getHandle().level().getBlockState(pos);
-        if (!(state.getBlock() instanceof AbstractBedBlock bedBlock)) {
+        if (!(state.getBlock() instanceof net.minecraft.world.level.block.AbstractBedBlock bed)) {
             return false;
         }
 
-        BedRule bedRule = bedBlock.getBedRule(this.getHandle().level(), pos);
-        if (this.getHandle().startSleepInBed(bedBlock, state, bedRule, pos).left().isPresent()) {
+        if (this.getHandle().startSleepInBed(bed, state, bed.getBedRule(this.getHandle().level(), pos), pos).left().isPresent()) { //TODO: force?
             return false;
         }
 
-        state = state.setValue(AbstractBedBlock.OCCUPIED, true);
-        this.getHandle().level().setBlockAndUpdate(pos, state);
+        // From BlockBed
+        state = state.setValue(BedBlock.OCCUPIED, true);
+        this.getHandle().level().setBlock(pos, state, net.minecraft.world.level.block.Block.UPDATE_INVISIBLE);
 
         return true;
     }
@@ -230,12 +229,6 @@ public class CraftHumanEntity extends CraftLivingEntity implements HumanEntity {
         Preconditions.checkArgument(damage >= 0, "Damage must not be negative");
 
         this.getHandle().startAutoSpinAttack(duration, damage, CraftItemStack.asNMSCopy(attackItem));
-    }
-
-    @Override
-    public boolean canCriticalAttack(org.bukkit.entity.Entity entity) {
-        Preconditions.checkArgument(entity != null, "entity cannot be null");
-        return this.getHandle().canCriticalAttack(((CraftEntity) entity).getHandle());
     }
 
     @Override
@@ -951,5 +944,11 @@ public class CraftHumanEntity extends CraftLivingEntity implements HumanEntity {
     @Override
     public org.bukkit.entity.Entity copy(Location location) {
         throw new UnsupportedOperationException("Cannot copy human entities");
+    }
+
+    @Override
+    public boolean canCriticalAttack(org.bukkit.entity.Entity other) {
+        Preconditions.checkArgument(other != null, "entity cannot be null");
+        return this.getHandle().canCriticalAttack(((CraftEntity) other).getHandle());
     }
 }

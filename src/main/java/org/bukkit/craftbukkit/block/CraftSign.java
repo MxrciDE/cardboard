@@ -3,6 +3,7 @@ package org.bukkit.craftbukkit.block;
 import com.google.common.base.Preconditions;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.level.block.entity.SignBlockEntity;
+import net.minecraft.world.level.block.entity.SignTextSlot;
 import org.bukkit.Bukkit;
 import org.bukkit.DyeColor;
 import org.bukkit.Location;
@@ -38,8 +39,8 @@ public class CraftSign<T extends SignBlockEntity> extends CraftBlockEntityState<
     @Override
     protected void load(T blockEntity) {
         super.load(blockEntity);
-        this.front = new CraftSignSide(blockEntity.getText(net.minecraft.world.level.block.entity.SignTextSlot.FRONT));
-        this.back = new CraftSignSide(blockEntity.getText(net.minecraft.world.level.block.entity.SignTextSlot.BACK));
+        this.front = new CraftSignSide(blockEntity.getText(SignTextSlot.FRONT));
+        this.back = new CraftSignSide(blockEntity.getText(SignTextSlot.BACK));
     }
 
     // Paper start
@@ -124,7 +125,7 @@ public class CraftSign<T extends SignBlockEntity> extends CraftBlockEntityState<
         this.ensureNoWorldGeneration();
         Preconditions.checkArgument(player != null, "player cannot be null");
 
-        if (this.getSnapshot().getSlotPlayerIsFacing(((CraftPlayer) player).getHandle()) == net.minecraft.world.level.block.entity.SignTextSlot.FRONT) {
+        if (this.getSnapshot().getSlotPlayerIsFacing(((CraftPlayer) player).getHandle()) == SignTextSlot.FRONT) {
             return this.front;
         }
 
@@ -152,8 +153,8 @@ public class CraftSign<T extends SignBlockEntity> extends CraftBlockEntityState<
 
     @Override
     public void applyTo(T blockEntity) {
-        this.getSnapshot().setText(this.front.applyLegacyStringToSignSide(), net.minecraft.world.level.block.entity.SignTextSlot.FRONT);
-        this.getSnapshot().setText(this.back.applyLegacyStringToSignSide(), net.minecraft.world.level.block.entity.SignTextSlot.BACK);
+        this.getSnapshot().setText(this.front.applyLegacyStringToSignSide(), SignTextSlot.FRONT);
+        this.getSnapshot().setText(this.back.applyLegacyStringToSignSide(), SignTextSlot.BACK);
 
         super.applyTo(blockEntity);
     }
@@ -187,20 +188,10 @@ public class CraftSign<T extends SignBlockEntity> extends CraftBlockEntityState<
         SignBlockEntity blockEntity = ((CraftSign<?>) sign).getBlockEntity();
         blockEntity.setAllowedPlayerEditor(player.getUniqueId());
 
-        ((CraftPlayer) player).getHandle().openTextEdit(blockEntity, org.bukkit.craftbukkit.block.sign.CraftSignSide.toVanilla(side));
+        ((CraftPlayer) player).getHandle().openTextEdit(blockEntity, CraftSignSide.toVanilla(side));
     }
 
     // Paper start
-    @Override
-    public void setOperatorFeaturesAllowed(boolean allowed) {
-        this.getSnapshot().allowOpFeatures = allowed;
-    }
-
-    @Override
-    public boolean isOperatorFeaturesAllowed() {
-        return this.getSnapshot().allowOpFeatures;
-    }
-
     public static Component[] sanitizeLines(java.util.List<? extends net.kyori.adventure.text.Component> lines) {
         Component[] components = new Component[4];
         for (int i = 0; i < 4; i++) {
@@ -259,4 +250,8 @@ public class CraftSign<T extends SignBlockEntity> extends CraftBlockEntityState<
     private static String revertComponent(Component component) {
         return CraftChatMessage.fromComponent(component);
     }
+    @Override
+    public void setOperatorFeaturesAllowed(boolean allowed) { this.getSnapshot().allowOpFeatures = allowed; }
+    @Override
+    public boolean isOperatorFeaturesAllowed() { return this.getSnapshot().allowOpFeatures; }
 }

@@ -13,11 +13,22 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.Recipe;
 import org.bukkit.craftbukkit.entity.CraftHumanEntity;
 import org.bukkit.inventory.InventoryHolder;
+import org.cardboardpowered.bridge.world.level.block.entity.BlockEntityBridge;
 
 public interface ContainerBridge {
 
     default java.util.List<ItemStack> getContents() {
-    	return null;
+        // MixinContainer grafts this bridge onto every Minecraft Container. Vanilla
+        // containers with dedicated mixins may override this method, while arbitrary
+        // modded containers still need a usable Bukkit Inventory#getContents() path.
+        if ((Object) this instanceof net.minecraft.world.Container container) {
+            java.util.List<ItemStack> contents = new java.util.ArrayList<>(container.getContainerSize());
+            for (int slot = 0; slot < container.getContainerSize(); slot++) {
+                contents.add(container.getItem(slot));
+            }
+            return contents;
+        }
+        return java.util.Collections.emptyList();
     }
 
     default void onOpen(CraftHumanEntity who) {
@@ -35,6 +46,13 @@ public interface ContainerBridge {
     }
 
     default org.bukkit.inventory.InventoryHolder getOwner() {
+        // Generic compatibility path for modded block containers. Dedicated vanilla
+        // container mixins can still override this method, but arbitrary BlockEntity
+        // implementations should expose their Bukkit owner rather than silently
+        // looking like ownerless custom inventories.
+        if ((Object) this instanceof net.minecraft.world.level.block.entity.BlockEntity blockEntity) {
+            return ((BlockEntityBridge) blockEntity).cardboard$getOwner();
+        }
         return null;
     }
 
@@ -42,6 +60,16 @@ public interface ContainerBridge {
     }
 
     default org.bukkit.Location getLocation() {
+        // Bukkit Inventory#getLocation() is expected to identify the backing block
+        // for block inventories. Most modded containers have no dedicated Cardboard
+        // mixin, so derive this directly from the BlockEntity instead.
+        if ((Object) this instanceof net.minecraft.world.level.block.entity.BlockEntity blockEntity
+                && blockEntity.getLevel() != null) {
+            return org.bukkit.craftbukkit.block.CraftBlock.at(
+                    blockEntity.getLevel(),
+                    blockEntity.getBlockPos()
+            ).getLocation();
+        }
         return null;
     }
 

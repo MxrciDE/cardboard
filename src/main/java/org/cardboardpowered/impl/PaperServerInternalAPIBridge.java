@@ -10,8 +10,8 @@ import io.papermc.paper.world.damagesource.CombatEntry;
 import io.papermc.paper.world.damagesource.FallLocationType;
 import io.papermc.paper.world.damagesource.PaperCombatEntryWrapper;
 import io.papermc.paper.world.damagesource.PaperCombatTrackerWrapper;
+import io.papermc.paper.entity.poi.PaperPoiType;
 
-import java.util.Arrays;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -21,7 +21,7 @@ import net.minecraft.Optionull;
 import net.minecraft.world.damagesource.FallLocation;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.decoration.Mannequin;
-import net.minecraft.world.entity.player.PlayerModelPart;
+import net.minecraft.world.entity.ai.village.poi.PoiManager;
 import org.bukkit.GameRule;
 import org.bukkit.block.Biome;
 import org.bukkit.craftbukkit.CraftGameRule;
@@ -73,16 +73,15 @@ public class PaperServerInternalAPIBridge implements InternalAPIBridge {
         return new PaperCombatEntryWrapper(new net.minecraft.world.damagesource.CombatEntry(damageSource, damage, fallLocation, fallDistance));
     }
 
-    public Predicate<CommandSourceStack> restricted(Predicate<CommandSourceStack> predicate) {
-        record RestrictedPredicate(Predicate<CommandSourceStack> predicate) implements Predicate<CommandSourceStack>
-        // , PermissionLevelSource.RestrictedMarker
+    public Predicate<CommandSourceStack> restricted(Predicate<CommandSourceStack> predicate, boolean restricted) {
+        record RestrictedPredicate(Predicate<CommandSourceStack> predicate, boolean restricted) implements Predicate<CommandSourceStack>, org.cardboardpowered.bridge.commands.RestrictedCommandPredicate
         {
             @Override
             public boolean test(CommandSourceStack commandSourceStack) {
                 return this.predicate.test(commandSourceStack);
             }
         }
-        return new RestrictedPredicate(predicate);
+        return new RestrictedPredicate(predicate, restricted);
     }
 
 	@Override
@@ -90,21 +89,14 @@ public class PaperServerInternalAPIBridge implements InternalAPIBridge {
 		return new PaperResolvableProfile(Mannequin.DEFAULT_PROFILE);
 	}
 
-	// TODO: 1.21.9: Aw
-	public static final byte MannequinEntity_ALL_MODEL_PARTS = (byte)Arrays.stream(PlayerModelPart.values())
-		      .mapToInt(PlayerModelPart::getMask)
-		      .reduce(0, (flagL, flagR) -> flagL | flagR);
-	
 	@Override
 	public Mutable allSkinParts() {
-		return new PaperSkinParts.Mutable(MannequinEntity_ALL_MODEL_PARTS);
+		return new PaperSkinParts.Mutable(Mannequin.ALL_LAYERS);
 	}
 
 	@Override
 	public Component defaultMannequinDescription() {
-		// DEFAULT_DESCRIPTION not visible
-		return PaperAdventure.asAdventure(net.minecraft.network.chat.Component.nullToEmpty("Hello, I'm a Mannequin"));
-		// return PaperAdventure.asAdventure(MannequinEntity.DEFAULT_DESCRIPTION);
+		return PaperAdventure.asAdventure(Mannequin.DEFAULT_DESCRIPTION);
 	}
 
 	@Override
@@ -119,11 +111,12 @@ public class PaperServerInternalAPIBridge implements InternalAPIBridge {
 		return CraftMannequin.VALID_POSES;
 	}
 
-	@Override
-	public Occupancy createOccupancy(String enumNameEntry) {
-		// TODO Auto-generated method stub
-		return null;
-	}
+    @Override
+    public Occupancy createOccupancy(final String enumNameEntry) {
+        return new PaperPoiType.PaperOccupancy(
+                PoiManager.Occupancy.valueOf(enumNameEntry)
+        );
+    }
 
 
     // 26.2: Paper moved the adventure serializer accessors off UnsafeValues onto InternalAPIBridge
@@ -140,12 +133,12 @@ public class PaperServerInternalAPIBridge implements InternalAPIBridge {
 
     @Override
     public DamageSource.Builder createDamageSourceBuilder(org.bukkit.damage.DamageType damageType) {
-        return MN.createDamageSourceBuilder(damageType);
+        return new org.bukkit.craftbukkit.damage.CraftDamageSourceBuilder(damageType);
     }
 
     @Override
     public String getTranslationKey(org.bukkit.entity.EntityType entityType) {
-        return MN.getTranslationKey(entityType);
+        return org.bukkit.craftbukkit.entity.CraftEntityType.bukkitToMinecraft(entityType).getDescriptionId();
     }
 
     @Override
@@ -190,7 +183,70 @@ public class PaperServerInternalAPIBridge implements InternalAPIBridge {
     public Component resolveWithContext(Component component, org.bukkit.command.@Nullable CommandSender context,
                                         org.bukkit.entity.@Nullable Entity scoreboardSubject,
                                         boolean bypassPermissions) throws java.io.IOException {
-        return MN.resolveWithContext(component, context, scoreboardSubject, bypassPermissions);
+        net.minecraft.commands.CommandSourceStack source =
+                context != null ? org.bukkit.craftbukkit.command.VanillaCommandWrapper.getListener(context) : null;
+        if (source != null && bypassPermissions) {
+            source = source.withMaximumPermission(net.minecraft.server.permissions.PermissionSet.ALL_PERMISSIONS);
+        }
+
+        try {
+            final net.minecraft.network.chat.ResolutionContext.Builder builder =
+                    net.minecraft.network.chat.ResolutionContext.builder();
+            if (source != null) {
+                builder.withSource(source);
+            }
+            if (scoreboardSubject != null) {
+                builder.withEntityOverride(
+                        ((org.bukkit.craftbukkit.entity.CraftEntity) scoreboardSubject).getHandle());
+            }
+            return io.papermc.paper.adventure.PaperAdventure.asAdventure(
+                    net.minecraft.network.chat.ComponentUtils.resolve(
+                            builder.build(),
+                            io.papermc.paper.adventure.PaperAdventure.asVanilla(component)));
+        } catch (final com.mojang.brigadier.exceptions.CommandSyntaxException ex) {
+            throw new java.io.IOException(ex);
+        }
     }
 
+    @Override
+    public com.destroystokyo.paper.util.VersionFetcher getVersionFetcher() {
+        return new com.destroystokyo.paper.util.VersionFetcher.DummyVersionFetcher();
+    }
+
+
+    @Override
+    public <C> io.papermc.paper.persistence.PersistentDataKey<C> createPersistentDataKey(
+            net.kyori.adventure.key.Key key, org.bukkit.persistence.PersistentDataType<?, C> type) {
+        var namespaced = new org.bukkit.NamespacedKey(key.namespace(), key.value());
+        return new io.papermc.paper.persistence.PaperPersistentDataKey<>(namespaced, type);
+    }
+
+    @Override
+    public org.bukkit.enchantments.EnchantmentOffer[] rollEnchantmentOffers(
+            org.bukkit.inventory.ItemStack target, int seed, int shelves, int amount) {
+        var stack = org.bukkit.craftbukkit.inventory.CraftItemStack.asNMSCopy(target);
+        var registry = org.bukkit.craftbukkit.CraftRegistry.getMinecraftRegistry()
+                .lookupOrThrow(net.minecraft.core.registries.Registries.ENCHANTMENT);
+        var tag = registry.get(net.minecraft.tags.EnchantmentTags.IN_ENCHANTING_TABLE);
+        var random = net.minecraft.util.RandomSource.create(seed);
+        int[] costs = new int[amount];
+        for (int slot = 0; slot < amount; slot++) {
+            costs[slot] = net.minecraft.world.item.enchantment.EnchantmentHelper.getEnchantmentCost(random, slot, shelves, stack);
+            if (costs[slot] < slot + 1) costs[slot] = 0;
+        }
+        var offers = new org.bukkit.enchantments.EnchantmentOffer[amount];
+        for (int slot = 0; slot < amount; slot++) {
+            if (costs[slot] <= 0 || tag.isEmpty()) continue;
+            random.setSeed(seed + slot);
+            var choices = net.minecraft.world.item.enchantment.EnchantmentHelper.selectEnchantment(random, stack, costs[slot], tag.get().stream());
+            if (stack.is(net.minecraft.world.item.Items.BOOK) && choices.size() > 1) choices.remove(random.nextInt(choices.size()));
+            if (!choices.isEmpty()) {
+                var selected = choices.get(random.nextInt(choices.size()));
+                offers[slot] = new org.bukkit.enchantments.EnchantmentOffer(
+                        org.bukkit.craftbukkit.enchantments.CraftEnchantment.minecraftHolderToBukkit(selected.enchantment()),
+                        selected.level(), costs[slot]);
+            }
+        }
+        return offers;
+    }
 }

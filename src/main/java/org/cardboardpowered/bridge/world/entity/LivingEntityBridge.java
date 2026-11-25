@@ -8,11 +8,19 @@ import org.jspecify.annotations.Nullable;
 
 public interface LivingEntityBridge {
 
+    int cardboard$getDamageCooldownTime();
+
+    void cardboard$setDamageCooldownTime(int ticks);
+
     int getExpReward();
 
     void pushEffectCause(EntityPotionEffectEvent.Cause cause);
 
     CraftAttributeMap cardboard_getAttr();
+
+    boolean cardboard$getBukkitPickUpLoot();
+
+    void cardboard$setBukkitPickUpLoot(boolean pickup);
 
     @Nullable ItemEntity cardboard$drop(ItemStack stack, boolean randomizeMotion, boolean includeThrower);
 

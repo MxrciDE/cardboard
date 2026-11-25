@@ -12,6 +12,7 @@ import org.jspecify.annotations.NullMarked;
 
 @NullMarked
 public final class PaperPlayerPostEffects implements PlayerPostEffects {
+
     private final ServerPlayer handle;
 
     public PaperPlayerPostEffects(final ServerPlayer handle) {
@@ -35,12 +36,10 @@ public final class PaperPlayerPostEffects implements PlayerPostEffects {
             Preconditions.checkArgument(effect != null, "effects cannot be null");
             Preconditions.checkArgument(ids.add(PaperAdventure.asVanilla(effect)), "effects cannot be duplicate [%s]", effect);
         }
+        if (this.getHandle().getPostEffects().equals(List.copyOf(ids))) return false;
         this.getHandle().clearPostEffects();
-        boolean changed = false;
-        for (final Identifier id : ids) {
-            changed |= this.getHandle().addPostEffect(id);
-        }
-        return changed;
+        ids.forEach(this.getHandle()::addPostEffect);
+        return true;
     }
 
     @Override
@@ -64,4 +63,5 @@ public final class PaperPlayerPostEffects implements PlayerPostEffects {
     public void update() {
         this.getHandle().sendPostEffects();
     }
+
 }

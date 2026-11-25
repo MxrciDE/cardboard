@@ -45,10 +45,8 @@ import org.bukkit.Sound;
 import org.bukkit.World;
 import org.bukkit.block.BlockFace;
 import org.bukkit.block.PistonMoveReaction;
-import org.bukkit.damage.DamageSource;
 import org.bukkit.craftbukkit.CraftServer;
 import org.bukkit.craftbukkit.CraftSound;
-import org.bukkit.craftbukkit.damage.CraftDamageSource;
 import org.bukkit.craftbukkit.block.CraftBlock;
 import org.bukkit.craftbukkit.persistence.CraftPersistentDataContainer;
 import org.bukkit.craftbukkit.persistence.CraftPersistentDataTypeRegistry;
@@ -84,7 +82,6 @@ import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 
 public abstract class CraftEntity implements org.bukkit.entity.Entity {
-    private final java.util.Map<net.kyori.adventure.key.Key, java.util.function.Predicate<org.bukkit.entity.Entity>> additionalAlliedRules = new java.util.HashMap<>();
 
     private static final Logger LOGGER = LogUtils.getLogger();
 
@@ -101,15 +98,18 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
     private final EntityType entityType;
     private EntityDamageEvent lastDamageEvent;
     private final CraftPersistentDataContainer persistentDataContainer = new CraftPersistentDataContainer(CraftEntity.DATA_TYPE_REGISTRY);
-    // Paper start - Folia shedulers
-    //public final io.papermc.paper.threadedregions.EntityScheduler taskScheduler = new io.papermc.paper.threadedregions.EntityScheduler(this);
-    //private final io.papermc.paper.threadedregions.scheduler.FoliaEntityScheduler apiScheduler = new io.papermc.paper.threadedregions.scheduler.FoliaEntityScheduler(this);
+    // Paper start - Folia schedulers
+    private final io.papermc.paper.threadedregions.scheduler.FallbackEntityScheduler apiScheduler =
+            new io.papermc.paper.threadedregions.scheduler.FallbackEntityScheduler(this);
 
     @Override
     public final io.papermc.paper.threadedregions.scheduler.EntityScheduler getScheduler() {
-        //return this.apiScheduler; // TODO
-        return null;
-    };
+        return this.apiScheduler;
+    }
+
+    public final void cardboard$retireScheduler() {
+        this.apiScheduler.retire();
+    }
     // Paper end - Folia schedulers
 
     public CraftEntity(final Entity entity) {
@@ -315,6 +315,33 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
             return false;
         }
 
+        /*
+         * Paper fires EntityTeleportEvent for Bukkit non-player
+         * teleports. Plugins may cancel the operation or redirect
+         * the destination with event#setTo.
+         */
+        final org.bukkit.event.entity.EntityTeleportEvent event =
+                new org.bukkit.event.entity.EntityTeleportEvent(
+                        this,
+                        this.getLocation(),
+                        location.clone()
+                );
+
+        this.server.getPluginManager().callEvent(event);
+
+        if (event.isCancelled() || event.getTo() == null) {
+            return false;
+        }
+
+        location = event.getTo().clone();
+
+        Preconditions.checkArgument(
+                location.getWorld() != null,
+                "Target world cannot be null"
+        );
+
+        location.checkFinite();
+
         final Set<net.minecraft.world.entity.Relative> relativeFlags = EnumSet.noneOf(net.minecraft.world.entity.Relative.class);
         for (final TeleportFlag flag : flags) {
             if (flag instanceof TeleportFlag.Relative relativeFlag) {
@@ -329,8 +356,7 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
                 location.getYaw(),
                 location.getPitch(),
                 relativeFlags,
-                TeleportTransition.DO_NOTHING//,
-                //cause // TODO
+                TeleportTransition.DO_NOTHING
         )) != null;
     }
 
@@ -474,8 +500,27 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
 
     @Override
     public void remove() {
-        me.isaiah.common.cmixin.IMixinEntity common = (me.isaiah.common.cmixin.IMixinEntity)this.entity;
+        if (this.entity.isRemoved()) {
+            return;
+        }
+
+        EntityBridge bridge = (EntityBridge) this.entity;
+        org.bukkit.event.entity.EntityRemoveEvent.Cause cause =
+                bridge.cardboard$isGeneration()
+                        ? null
+                        : org.bukkit.event.entity.EntityRemoveEvent.Cause.PLUGIN;
+        bridge.cardboard$setRemoveEventCause(cause);
+
+        me.isaiah.common.cmixin.IMixinEntity common =
+                (me.isaiah.common.cmixin.IMixinEntity) this.entity;
+
         common.Iremove(IRemoveReason.DISCARDED);
+
+        if (cause != null) {
+            this.server.getPluginManager().callEvent(
+                    new org.bukkit.event.entity.EntityRemoveEvent(this, cause)
+            );
+        }
     }
 
     @Override
@@ -530,14 +575,53 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
         Preconditions.checkArgument(passenger != null, "Entity passenger cannot be null");
         Preconditions.checkArgument(!this.equals(passenger), "Entity cannot ride itself.");
 
-        return ((CraftEntity) passenger).getHandle().startRiding(this.getHandle(), true, true);
+        if (!(passenger instanceof CraftEntity craftPassenger)) {
+            return false;
+        }
+
+        final org.bukkit.event.entity.EntityMountEvent event =
+                new org.bukkit.event.entity.EntityMountEvent(
+                        passenger,
+                        this
+                );
+
+        this.server.getPluginManager().callEvent(event);
+
+        if (event.isCancelled()) {
+            return false;
+        }
+
+        return craftPassenger.getHandle()
+                .startRiding(
+                        this.getHandle(),
+                        true,
+                        true
+                );
     }
 
     @Override
     public boolean removePassenger(org.bukkit.entity.Entity passenger) {
         Preconditions.checkArgument(passenger != null, "Entity passenger cannot be null");
 
-        ((CraftEntity) passenger).getHandle().stopRiding();
+        if (!(passenger instanceof CraftEntity craftPassenger)) {
+            return false;
+        }
+
+        if (craftPassenger.getHandle().getVehicle() == this.getHandle()) {
+            final org.bukkit.event.entity.EntityDismountEvent event =
+                    new org.bukkit.event.entity.EntityDismountEvent(
+                            passenger,
+                            this
+                    );
+
+            this.server.getPluginManager().callEvent(event);
+
+            if (event.isCancelled()) {
+                return false;
+            }
+        }
+
+        craftPassenger.getHandle().stopRiding();
         return true;
     }
 
@@ -580,12 +664,6 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
     @Override
     public EntityDamageEvent getLastDamageCause() {
         return this.lastDamageEvent;
-    }
-
-    @Override
-    public @Nullable ItemStack getWeapon() {
-        net.minecraft.world.item.ItemStack stack = this.getHandle().getWeaponItem();
-        return stack == null ? null : ((ItemStackBridge) stack).cardboard$asBukkitCopy();
     }
 
     @Override
@@ -801,36 +879,6 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
     }
 
     @Override
-    public boolean isAlliedTo(org.bukkit.entity.Entity other) {
-        Preconditions.checkArgument(other != null, "other cannot be null");
-        return this.getHandle().isAlliedTo(((CraftEntity) other).getHandle());
-    }
-
-    @Override
-    public java.util.Map<net.kyori.adventure.key.Key, java.util.function.Predicate<org.bukkit.entity.Entity>> getAdditionalAlliedRules() {
-        return java.util.Collections.unmodifiableMap(this.additionalAlliedRules);
-    }
-
-    @Override
-    public void addAdditionalAlliedRule(net.kyori.adventure.key.Key key, java.util.function.Predicate<org.bukkit.entity.Entity> predicate) {
-        Preconditions.checkArgument(key != null, "key cannot be null");
-        Preconditions.checkArgument(predicate != null, "predicate cannot be null");
-        this.additionalAlliedRules.put(key, predicate);
-    }
-
-    @Override
-    public void removeAdditionalAlliedRule(net.kyori.adventure.key.Key key) {
-        Preconditions.checkArgument(key != null, "key cannot be null");
-        this.additionalAlliedRules.remove(key);
-    }
-
-    @Override
-    public void removeAdditionalAlliedRule(net.kyori.adventure.key.Namespaced nameSpaced) {
-        Preconditions.checkArgument(nameSpaced != null, "nameSpaced cannot be null");
-        this.additionalAlliedRules.entrySet().removeIf(entry -> entry.getKey().namespace().equals(nameSpaced.namespace()));
-    }
-
-    @Override
     public String getName() {
         return CraftChatMessage.fromComponent(this.getHandle().getName());
     }
@@ -931,28 +979,6 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
     }
 
     @Override
-    public int getInvulnerableTime() {
-        return this.getHandle().getInvulnerableTime();
-    }
-
-    @Override
-    public void setInvulnerableTime(final int ticks) {
-        Preconditions.checkArgument(ticks >= 0, "ticks cannot be negative");
-        this.getHandle().setInvulnerableTime(ticks);
-    }
-
-    @Override
-    public boolean isMarkedInvulnerable() {
-        return this.getHandle().isInvulnerable();
-    }
-
-    @Override
-    public boolean isInvulnerableTo(final @NotNull DamageSource source) {
-        Preconditions.checkArgument(source != null, "DamageSource cannot be null");
-        return this.getHandle().isInvulnerableToBase(((CraftDamageSource) source).getHandle());
-    }
-
-    @Override
     public boolean isSilent() {
         return this.getHandle().isSilent();
     }
@@ -973,20 +999,6 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
     }
 
     @Override
-    public float getAirDrag() {
-        return this.getHandle().getAirDrag();
-    }
-
-    @Override
-    public double getGravity() {
-        return this.getHandle().getGravity();
-    }
-
-    @Override
-    public double getDefaultGravity() {
-        return this.getHandle().getDefaultGravity();
-    }
-
     public int getPortalCooldown() {
         return this.getHandle().getPortalCooldown();
     }
@@ -1050,15 +1062,15 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
 
     public void setPose0(net.minecraft.world.entity.Pose pose, boolean fixed) {
         final Entity handle = this.getHandle();
-        //handle.fixedPose = false; // TODO
+        final EntityBridge bridge = (EntityBridge) handle;
+        bridge.cardboard$setFixedPose(false);
         handle.setPose(pose);
-        //handle.fixedPose = fixed; // TODO
+        bridge.cardboard$setFixedPose(fixed);
     }
 
     @Override
     public boolean hasFixedPose() {
-        //return this.getHandle().fixedPose; // TODO
-        return false;
+        return ((EntityBridge) this.getHandle()).cardboard$hasFixedPose();
     }
 
     @Override
@@ -1451,15 +1463,74 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
 
     @Override
     public org.bukkit.event.entity.EntityRemoveEvent.Cause getRemoveEventCause() {
-        final net.minecraft.world.entity.Entity.RemovalReason reason = this.entity.getRemovalReason();
-        if (reason == null) return null;
-        return switch (reason) {
-            case KILLED -> org.bukkit.event.entity.EntityRemoveEvent.Cause.DEATH;
-            case DISCARDED -> org.bukkit.event.entity.EntityRemoveEvent.Cause.DISCARD;
-            case UNLOADED_TO_CHUNK -> org.bukkit.event.entity.EntityRemoveEvent.Cause.UNLOAD;
-            case UNLOADED_WITH_PLAYER, CHANGED_DIMENSION ->
-                    org.bukkit.event.entity.EntityRemoveEvent.Cause.PLAYER_QUIT;
-        };
+        // Match Paper: this is the explicitly supplied Bukkit removal cause,
+        // not an inference from the vanilla removal reason.
+        return ((EntityBridge) this.entity).cardboard$getRemoveEventCause();
     }
 
+
+    private final java.util.Map<net.kyori.adventure.key.Key, java.util.function.Predicate<org.bukkit.entity.Entity>> additionalAlliedRules = new java.util.HashMap<>();
+
+    public boolean considersEntityAsAlly0(org.bukkit.entity.Entity other) {
+        return this.additionalAlliedRules.values().stream().anyMatch(rule -> rule.test(other));
+    }
+
+    @Override
+    public boolean isAlliedTo(org.bukkit.entity.Entity other) {
+        Preconditions.checkArgument(other != null, "other cannot be null");
+        return this.getHandle().isAlliedTo(((CraftEntity) other).getHandle());
+    }
+
+    @Override
+    public java.util.Map<net.kyori.adventure.key.Key, java.util.function.Predicate<org.bukkit.entity.Entity>> getAdditionalAlliedRules() {
+        return java.util.Collections.unmodifiableMap(this.additionalAlliedRules);
+    }
+
+    @Override
+    public void addAdditionalAlliedRule(net.kyori.adventure.key.Key key, java.util.function.Predicate<org.bukkit.entity.Entity> rule) {
+        Preconditions.checkArgument(key != null, "key cannot be null");
+        Preconditions.checkArgument(rule != null, "predicate cannot be null");
+        this.additionalAlliedRules.put(key, rule);
+    }
+
+    @Override
+    public void removeAdditionalAlliedRule(net.kyori.adventure.key.Key key) {
+        Preconditions.checkArgument(key != null, "key cannot be null");
+        this.additionalAlliedRules.remove(key);
+    }
+
+    @Override
+    public void removeAdditionalAlliedRule(net.kyori.adventure.key.Namespaced namespace) {
+        Preconditions.checkArgument(namespace != null, "namespace cannot be null");
+        this.additionalAlliedRules.keySet().removeIf(key -> key.namespace().equals(namespace.namespace()));
+    }
+    @Override
+    public float getAirDrag() {
+        return this.getHandle().getAirDrag();
+    }
+
+
+    @Override
+    public double getDefaultGravity() { return this.getHandle().getDefaultGravity(); }
+    @Override
+    public double getGravity() { return this.getHandle().getGravity(); }
+    @Override
+    public int getInvulnerableTime() { return this.getHandle().getInvulnerableTime(); }
+    @Override
+    public void setInvulnerableTime(int ticks) {
+        Preconditions.checkArgument(ticks >= 0, "ticks cannot be negative");
+        this.getHandle().setInvulnerableTime(ticks);
+    }
+    @Override
+    public boolean isMarkedInvulnerable() { return this.getHandle().isInvulnerable(); }
+    @Override
+    public boolean isInvulnerableTo(org.bukkit.damage.DamageSource source) {
+        Preconditions.checkArgument(source != null, "DamageSource cannot be null");
+        return this.getHandle().isInvulnerableToBase(((org.bukkit.craftbukkit.damage.CraftDamageSource) source).getHandle());
+    }
+    @Override
+    public org.bukkit.inventory.ItemStack getWeapon() {
+        var stack = this.getHandle().getWeaponItem();
+        return stack == null ? null : org.bukkit.craftbukkit.inventory.CraftItemStack.asBukkitCopy(stack);
+    }
 }

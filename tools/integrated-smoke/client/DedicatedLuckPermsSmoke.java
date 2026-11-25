@@ -1,0 +1,99 @@
+package org.cardboardpowered.smoke;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
+import net.fabricmc.api.ModInitializer;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
+import org.bukkit.Bukkit;
+
+/** LuckPerms-Fabric declares environment=server; exercise it on its supported dedicated platform. */
+public final class DedicatedLuckPermsSmoke implements ModInitializer {
+    @Override
+    public void onInitialize() {
+        ConfigurationFabricSmoke.install();
+        if (!Boolean.getBoolean("cardboard.smoke.dedicated")) return;
+        Path exchange = Path.of(System.getProperty("cardboard.smoke.exchange"));
+        AtomicBoolean verified = new AtomicBoolean();
+        AtomicBoolean reconfiguring = new AtomicBoolean();
+        ServerLifecycleEvents.SERVER_STARTED.register(server -> {
+            try {
+                if (!net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("luckperms")) {
+                    throw new AssertionError("Real LuckPerms-Fabric was not loaded");
+                }
+                verifyWhitelistSettings(server);
+                Files.createDirectories(exchange);
+                Files.writeString(exchange.resolve("dedicated-ready"), "25579");
+                System.out.println("DEDICATED_LUCKPERMS_READY");
+            } catch (Throwable failure) {
+                fail(failure);
+            }
+        });
+        ServerTickEvents.END_SERVER_TICK.register(server -> {
+            try {
+                if (!verified.get() && Files.exists(exchange.resolve("dedicated-joined"))) {
+                    UUID id = net.minecraft.core.UUIDUtil.createOfflinePlayerUUID("SmokeGuest");
+                    var player = Bukkit.getPlayer(id);
+                    if (player == null && reconfiguring.get()) return;
+                    if (player == null || player.isOp()) throw new AssertionError("Expected a real non-op guest");
+                    var plugin = Bukkit.getPluginManager().getPlugin("IntegratedSmoke");
+                    if (!reconfiguring.get()) {
+                        plugin.getClass().getMethod("verifyLogin", UUID.class).invoke(plugin, id);
+                        LuckPermsSmoke.verify(player);
+                        plugin.getClass().getMethod("beginConfigurationReentry", UUID.class).invoke(plugin, id);
+                        reconfiguring.set(true);
+                        return;
+                    }
+                    @SuppressWarnings("unchecked") var state = (java.util.Map<String, String>) plugin.getClass()
+                            .getMethod("readConfiguration", UUID.class).invoke(plugin, id);
+                    if (state.containsKey("failure")) throw new AssertionError(state);
+                    if (!"1".equals(state.get("returned"))) return;
+                    LuckPermsSmoke.verify(player);
+                    System.out.println("CONFIGURATION_DEDICATED_PASS realTCP=1 permissions=restored");
+                    Files.writeString(exchange.resolve("dedicated-verified"), "PASS");
+                    verified.set(true);
+                }
+                if (verified.get() && Files.exists(exchange.resolve("dedicated-left")) && Bukkit.getOnlinePlayers().isEmpty()) {
+                    Files.writeString(exchange.resolve("dedicated.success"), "PASS");
+                    System.out.println("DEDICATED_LUCKPERMS_PASS");
+                    server.halt(false);
+                }
+            } catch (Throwable failure) {
+                fail(failure);
+            }
+        });
+    }
+
+    static void verifyWhitelistSettings(net.minecraft.server.MinecraftServer server) {
+        boolean enabled = server.isUsingWhitelist();
+        boolean enforced = server.isEnforceWhitelist();
+        try {
+            if (Bukkit.hasWhitelist() != enabled) throw new AssertionError("Bukkit read the enforcement flag as whitelist state");
+            for (boolean value : new boolean[] {false, true}) {
+                Bukkit.setWhitelist(value);
+                if (server.isUsingWhitelist() != value || Bukkit.hasWhitelist() != value) {
+                    throw new AssertionError("Bukkit did not change the native whitelist setting");
+                }
+                if (server.isEnforceWhitelist() != enforced) throw new AssertionError("Whitelist toggle changed enforcement");
+                Bukkit.setWhitelistEnforced(!enforced);
+                if (server.isEnforceWhitelist() == enforced || Bukkit.isWhitelistEnforced() == enforced
+                        || server.isUsingWhitelist() != value || Bukkit.hasWhitelist() != value) {
+                    throw new AssertionError("Whitelist state and enforcement are not independent");
+                }
+                Bukkit.setWhitelistEnforced(enforced);
+            }
+            System.out.println("WHITELIST_SETTINGS_PASS dedicated=" + server.isDedicatedServer());
+        } finally {
+            server.setUsingWhitelist(enabled);
+            server.setEnforceWhitelist(enforced);
+        }
+    }
+
+    private static void fail(Throwable failure) {
+        failure.printStackTrace();
+        System.err.println("DEDICATED_LUCKPERMS_FAILED");
+        System.exit(1);
+    }
+}

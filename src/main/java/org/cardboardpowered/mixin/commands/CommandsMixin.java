@@ -1,123 +1,151 @@
 /**
  * CardboardPowered - Bukkit/Spigot for Fabric
  * Copyright (C) CardboardPowered.org and contributors
- * 
+ *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public
- * License as published by the Free Software Foundation; either 
+ * License as published by the Free Software Foundation; either
  * version 3 of the License, or (at your option) any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- * 
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  */
 package org.cardboardpowered.mixin.commands;
 
 import com.google.common.collect.Maps;
-import org.bukkit.craftbukkit.event.CraftEventFactory;
-import org.cardboardpowered.bridge.server.level.ServerPlayerBridge;
 import com.mojang.brigadier.tree.CommandNode;
 import com.mojang.brigadier.tree.RootCommandNode;
+
+import net.minecraft.commands.CommandBuildContext;
+import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.commands.Commands;
+import net.minecraft.network.protocol.game.ClientboundCommandsPacket;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.permissions.PermissionProviderCheck;
+
+import org.bukkit.craftbukkit.event.CraftEventFactory;
 import org.bukkit.entity.Player;
 import org.bukkit.event.player.PlayerCommandSendEvent;
+
+import org.cardboardpowered.bridge.commands.PermissionProviderCheckBridge;
+import org.cardboardpowered.bridge.server.level.ServerPlayerBridge;
+
+import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.Map;
-import net.minecraft.commands.CommandSourceStack;
-import net.minecraft.commands.Commands;
-import net.minecraft.server.level.ServerPlayer;
 
 @Mixin(Commands.class)
 public class CommandsMixin {
 
-	// void makeTreeForSource( CommandNode tree, CommandNode result,  ServerCommandSource source, Map resultNodes) 
-	// void deepCopyNodes    ( CommandNode root, CommandNode newRoot, Object source,              Map nodes) 
-	
     @Shadow
     public com.mojang.brigadier.CommandDispatcher<CommandSourceStack> dispatcher;
 
-    /*
-    @Shadow
-    public void makeTreeForSource(CommandNode<ServerCommandSource>a, CommandNode<CommandSource> b, ServerCommandSource c, Map<CommandNode<ServerCommandSource>, CommandNode<CommandSource>> map) {
-    }
-    */
-    
-    @Shadow
-    private static <S> void fillUsableCommands(CommandNode<S> root, CommandNode<S> newRoot, S source, Map<CommandNode<S>, CommandNode<S>> nodes) {    	
+    @Redirect(method = "<init>", at = @At(value = "NEW", target = "com/mojang/brigadier/CommandDispatcher"))
+    private com.mojang.brigadier.CommandDispatcher<CommandSourceStack> cardboard$nativeArgumentRoot() {
+        return new com.mojang.brigadier.CommandDispatcher<>(new org.cardboardpowered.impl.command.NativeCommandTree.Root<>());
     }
 
-    @SuppressWarnings({ "rawtypes", "unchecked" })
-    @Inject(at = @At("HEAD"), method = "sendCommands")
-    public void bukkitize(ServerPlayer entityplayer, CallbackInfo ci) {
-        //if ( SpigotConfig.tabComplete < 0 ) return; // Spigot
+    @Shadow
+    @Final
+    private static ClientboundCommandsPacket.NodeInspector<CommandSourceStack> COMMAND_NODE_INSPECTOR;
 
-        Map<CommandNode<CommandSourceStack>, CommandNode<CommandSourceStack>> map = Maps.newIdentityHashMap();
-        RootCommandNode vanillaRoot = new RootCommandNode();
+    @Shadow
+    private static <S> void fillUsableCommands(
+            CommandNode<S> root,
+            CommandNode<S> newRoot,
+            S source,
+            Map<CommandNode<S>, CommandNode<S>> nodes
+    ) {
+    }
 
-        RootCommandNode<CommandSourceStack> vanilla = entityplayer.level().getServer().getCommands().getDispatcher().getRoot();
-        map.put(vanilla, vanillaRoot);
-        this.fillUsableCommands(vanilla, vanillaRoot, entityplayer.createCommandSourceStack(), (Map) map);
+    /**
+     * Minecraft 26.2 stores vanilla command permissions inside
+     * PermissionProviderCheck predicates.
+     *
+     * Bind each predicate to its actual root Brigadier command node so that
+     * PermissionProviderCheckMixin can translate it to the Bukkit permission
+     * such as "minecraft.command.gamemode".
+     */
+    @Inject(method = "<init>", at = @At("RETURN"))
+    private void cardboard$bindVanillaPermissionNodes(
+            Commands.CommandSelection commandSelection,
+            CommandBuildContext context,
+            CallbackInfo ci
+    ) {
+        for (CommandNode<CommandSourceStack> node :
+                this.dispatcher.getRoot().getChildren()) {
 
-        RootCommandNode<CommandSourceStack> rootcommandnode = new RootCommandNode();
+            if (node.getRequirement()
+                    instanceof PermissionProviderCheck<?> permissionCheck) {
 
-        map.put(this.dispatcher.getRoot(), rootcommandnode);
-        this.fillUsableCommands(this.dispatcher.getRoot(), rootcommandnode, entityplayer.createCommandSourceStack(), (Map) map);
+                ((PermissionProviderCheckBridge) (Object) permissionCheck)
+                        .cardboard$setVanillaNode(node);
+            }
+        }
+    }
 
-        Collection<String> bukkit = new LinkedHashSet<>();
-        for (CommandNode node : rootcommandnode.getChildren())
-            bukkit.add(node.getName());
+    /**
+     * Build the command tree for this specific player, expose its top-level
+     * labels through Bukkit's PlayerCommandSendEvent, then send a root that
+     * contains only labels retained by plugins.
+     *
+     * Cardboard previously fired PlayerCommandSendEvent but ignored changes to
+     * event.getCommands(), which made command-hiding plugins unable to remove
+     * commands from client-side slash/TAB suggestions.
+     */
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    @Inject(at = @At("HEAD"), method = "sendCommands", cancellable = true)
+    private void cardboard$filterAndSendCommands(
+            ServerPlayer entityplayer,
+            CallbackInfo ci
+    ) {
+        Map<CommandNode<CommandSourceStack>, CommandNode<CommandSourceStack>> map =
+                Maps.newIdentityHashMap();
 
-        PlayerCommandSendEvent event = new PlayerCommandSendEvent((Player) ((ServerPlayerBridge)entityplayer).getBukkitEntity(), new LinkedHashSet<>(bukkit));
+        RootCommandNode<CommandSourceStack> rootCommandNode =
+                new RootCommandNode<>();
+
+        map.put(this.dispatcher.getRoot(), rootCommandNode);
+
+        fillUsableCommands(
+                this.dispatcher.getRoot(),
+                rootCommandNode,
+                entityplayer.createCommandSourceStack(),
+                (Map) map
+        );
+
+        Collection<String> originalCommands = new LinkedHashSet<>();
+        for (CommandNode<CommandSourceStack> node : rootCommandNode.getChildren()) {
+            originalCommands.add(node.getName());
+        }
+
+        PlayerCommandSendEvent event = new PlayerCommandSendEvent(
+                (Player) ((ServerPlayerBridge) entityplayer).getBukkitEntity(),
+                new LinkedHashSet<>(originalCommands)
+        );
         CraftEventFactory.callEvent(event);
 
-        // Remove labels that were removed during the event
-        //for (String orig : bukkit)
-        //    if (!event.getCommands().contains(orig)) rootcommandnode.removeCommand(orig);
-    }
-
-    /*
-    public void sendCommandTree(ServerPlayerEntity player) {
-		Map<CommandNode<ServerCommandSource>, CommandNode<ServerCommandSource>> map = new HashMap();
-		RootCommandNode<ServerCommandSource> rootCommandNode = new RootCommandNode<>();
-		map.put(this.dispatcher.getRoot(), rootCommandNode);
-		deepCopyNodes(this.dispatcher.getRoot(), rootCommandNode, player.getCommandSource(), map);
-		player.networkHandler.sendPacket(new CommandTreeS2CPacket(rootCommandNode, INSPECTOR));
-	}
-    
-    rivate void sendAsync(ServerPlayerEntity player, Collection<CommandNode<ServerCommandSource>> dispatcherRootChildren) {
-        HashMap map = new HashMap();
-        RootCommandNode rootCommandNode = new RootCommandNode();
-        map.put((CommandNode)this.dispatcher.getRoot(), (CommandNode)rootCommandNode);
-        CommandManager.fillUsableCommands(dispatcherRootChildren, rootCommandNode, player.getCommandSource(), map);
-        LinkedHashSet<String> bukkit = new LinkedHashSet<String>();
-        for (CommandNode node : rootCommandNode.getChildren()) {
-            bukkit.add(node.getName());
+        RootCommandNode<CommandSourceStack> filteredRoot = new RootCommandNode<>();
+        for (CommandNode<CommandSourceStack> node : rootCommandNode.getChildren()) {
+            if (event.getCommands().contains(node.getName())) {
+                filteredRoot.addChild(node);
+            }
         }
-        new AsyncPlayerSendCommandsEvent((Player)player.getBukkitEntity(), rootCommandNode, false).callEvent();
-        MinecraftServer.getServer().execute(() -> this.runSync(player, bukkit, (RootCommandNode<ServerCommandSource>)rootCommandNode));
-    }
 
-    private void runSync(ServerPlayerEntity player, Collection<String> bukkit, RootCommandNode<ServerCommandSource> rootCommandNode) {
-        new AsyncPlayerSendCommandsEvent((Player)player.getBukkitEntity(), rootCommandNode, true).callEvent();
-        PlayerCommandSendEvent event = new PlayerCommandSendEvent((Player)player.getBukkitEntity(), new LinkedHashSet<String>(bukkit));
-        event.getPlayer().getServer().getPluginManager().callEvent((Event)event);
-        for (String orig : bukkit) {
-            if (event.getCommands().contains(orig)) continue;
-            rootCommandNode.removeCommand(orig);
-        }
-        player.networkHandler.method_14364_sendPacket(new CommandTreeS2CPacket(rootCommandNode, INSPECTOR));
-    }
-    */
+        entityplayer.connection.send(
+                new ClientboundCommandsPacket(filteredRoot, COMMAND_NODE_INSPECTOR)
+        );
 
+        ci.cancel();
+    }
 }
+

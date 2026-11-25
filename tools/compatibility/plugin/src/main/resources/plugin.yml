@@ -1,0 +1,15 @@
+name: CardboardCompatProbe
+version: 0.1.0
+main: org.cardboardpowered.compat.CardboardCompatProbe
+api-version: '26.2'
+load: POSTWORLD
+softdepend: [CoreProtect, PlaceholderAPI, UltraPermissions]
+commands:
+  cardboardcompat:
+    description: Run deterministic Cardboard Paper/Bukkit compatibility probes
+    usage: /cardboardcompat <run|summary|failures|wave2b|wave2c|wave2cstatus|wave2d|wave2dstatus|wave3|wave3status|status|reset>
+    permission: cardboard.compat.admin
+permissions:
+  cardboard.compat.admin:
+    description: Allows Cardboard compatibility probe control
+    default: op

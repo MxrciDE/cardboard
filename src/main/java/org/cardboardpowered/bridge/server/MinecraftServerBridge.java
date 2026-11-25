@@ -37,6 +37,8 @@ import net.minecraft.world.level.storage.WorldData;
 
 public interface MinecraftServerBridge {
 
+    void cardboard$setRestartController(org.cardboardpowered.impl.util.ServerRestart controller);
+
     void removeLevel(ServerLevel level);
 
     void addLevel(ServerLevel level);
@@ -88,6 +90,8 @@ public interface MinecraftServerBridge {
 	void createLevel(LevelStem levelStem, WorldLoadingInfoAndData loadingInfo, LevelDataAndDimensions.WorldDataAndGenSettings serverLevelData);
 
     boolean cardboard$isDebugging();
+
+    boolean cardboard$isIteratingOverLevels();
 
 	void cardboard$worldLoaderContext(DataLoadContext value);
 }

@@ -16,6 +16,8 @@ import java.util.function.Consumer;
 import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.attribute.EnvironmentAttributes;
 import net.minecraft.world.entity.Entity;
@@ -27,6 +29,7 @@ import net.minecraft.world.level.WorldGenLevel;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.ChorusFlowerBlock;
 import net.minecraft.world.level.chunk.ChunkGenerator;
+import net.minecraft.world.level.levelgen.feature.Feature;
 import net.minecraft.world.level.portal.TeleportTransition;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.HitResult;
@@ -48,6 +51,7 @@ import org.bukkit.craftbukkit.block.data.CraftBlockData;
 import org.bukkit.craftbukkit.entity.CraftEntity;
 import org.bukkit.craftbukkit.entity.CraftEntityTypes;
 import org.bukkit.craftbukkit.inventory.CraftItemStack;
+import org.bukkit.craftbukkit.util.BlockStateListPopulator;
 import org.bukkit.craftbukkit.util.CraftLocation;
 import org.bukkit.craftbukkit.util.CraftNamespacedKey;
 import org.bukkit.craftbukkit.util.RandomSourceWrapper;
@@ -177,10 +181,8 @@ public abstract class CraftRegionAccessor implements RegionAccessor {
 
     public boolean generateTree(Location location, Random random, TreeType treeType) {
         BlockPos pos = CraftLocation.toBlockPosition(location);
-        
-        ChunkGenerator gen = ((ServerLevel)this.getHandle()).getChunkSource().getGenerator();
-        
-        return this.generateTree(this.getHandle(), gen, pos, new RandomSourceWrapper(random), treeType);
+        ChunkGenerator generator = this.getHandle().getLevel().getChunkSource().getGenerator();
+        return this.generateTree(this.getHandle(), generator, pos, new RandomSourceWrapper(random), treeType);
     }
 
     public boolean generateTree(Location location, Random random, TreeType treeType, Consumer<? super BlockState> consumer) {
@@ -191,36 +193,43 @@ public abstract class CraftRegionAccessor implements RegionAccessor {
     }
 
     public boolean generateTree(Location location, Random random, TreeType treeType, Predicate<? super BlockState> predicate) {
-        /*
-    	BlockPos pos = CraftLocation.toBlockPosition(location);
+        BlockPos pos = CraftLocation.toBlockPosition(location);
         BlockStateListPopulator populator = new BlockStateListPopulator(this.getHandle());
-        
-        ChunkGenerator gen = ((ServerWorld)this.getHandle()).getChunkManager().getChunkGenerator()
-        boolean result = this.generateTree(populator, gen, pos, new RandomSourceWrapper(random), treeType);
-        populator.refreshTiles();
-        for (BlockState blockState : populator.getList()) {
-            if (predicate != null && !predicate.test((BlockState)blockState)) continue;
-            blockState.update(true, true);
-        }
+        ChunkGenerator generator = this.getHandle().getLevel().getChunkSource().getGenerator();
+        boolean result = this.generateTree(populator, generator, pos, new RandomSourceWrapper(random), treeType);
+        populator.placeSomeBlocks(predicate == null ? block -> true : predicate);
         return result;
-        */
-    	// TODO
-    	return false;
     }
 
-    /**
-     * Minecraft 26.3 no longer exposes the old ConfiguredFeature registry.
-     * Tree generation remains disabled until the new feature API is bridged.
-     */
     public boolean generateTree(WorldGenLevel access, ChunkGenerator chunkGenerator, BlockPos pos, net.minecraft.util.RandomSource random, TreeType treeType) {
-        return false;
+        ResourceKey<Feature> feature = CraftTreeType.toFeature(treeType, this.isNormalWorld());
+        if (feature == null) {
+            ChorusFlowerBlock.generatePlant(access, pos, random, 8);
+            return true;
+        }
+        Holder<Feature> holder = access.registryAccess().lookupOrThrow(Registries.FEATURE).get(feature).orElse(null);
+        return holder != null && holder.value().place(access, chunkGenerator, random, pos);
     }
 
     public org.bukkit.entity.Entity spawnEntity(Location location, EntityType entityType) {
+        Preconditions.checkArgument(entityType != null, "Entity type cannot be null");
+        if (!entityType.getKey().getNamespace().equals(NamespacedKey.MINECRAFT)) {
+            return this.spawnEntity(location, entityType, true);
+        }
         return this.spawn(location, entityType.getEntityClass());
     }
 
     public org.bukkit.entity.Entity spawnEntity(Location loc, EntityType type, boolean randomizeData) {
+        Preconditions.checkArgument(loc != null, "Location cannot be null");
+        Preconditions.checkArgument(type != null, "Entity type cannot be null");
+        if (!type.getKey().getNamespace().equals(NamespacedKey.MINECRAFT)) {
+            Entity entity = org.bukkit.craftbukkit.entity.CraftEntityType.bukkitToMinecraft(type)
+                    .create(this.getHandle().getLevel(), EntitySpawnReason.COMMAND);
+            Preconditions.checkArgument(entity != null, "Entity type cannot be spawned: %s", type);
+            entity.absSnapTo(loc.getX(), loc.getY(), loc.getZ(), loc.getYaw(), loc.getPitch());
+            entity.setYHeadRot(loc.getYaw());
+            return this.addEntity(entity, CreatureSpawnEvent.SpawnReason.CUSTOM, null, randomizeData);
+        }
         return this.spawn(loc, type.getEntityClass(), null, CreatureSpawnEvent.SpawnReason.CUSTOM, randomizeData);
     }
 
@@ -284,8 +293,7 @@ public abstract class CraftRegionAccessor implements RegionAccessor {
     public <T extends org.bukkit.entity.Entity> T createEntity(Location location, Class<T> clazz) throws IllegalArgumentException {
         Entity entity = this.createEntity(location, clazz, true);
         if (!this.isNormalWorld()) {
-            // TODO
-        	// entity.generation = true;
+            ((EntityBridge) entity).cardboard$setGeneration(true);
         }
         return (T)((EntityBridge)entity).getBukkitEntity();
     }
@@ -332,7 +340,7 @@ public abstract class CraftRegionAccessor implements RegionAccessor {
             ((Mob)entity).finalizeSpawn(this.getHandle(), this.getHandle().getCurrentDifficultyAt(entity.blockPosition()), EntitySpawnReason.COMMAND, null);
         }
         if (!this.isNormalWorld()) {
-            // TODO entity.generation = true;
+            ((EntityBridge) entity).cardboard$setGeneration(true);
         }
         if (function != null) {
             function.accept((T) ((EntityBridge)entity).getBukkitEntity());

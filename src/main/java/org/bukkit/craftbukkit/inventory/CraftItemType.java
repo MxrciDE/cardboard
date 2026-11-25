@@ -7,6 +7,19 @@ import com.google.common.collect.Multimap;
 import io.papermc.paper.registry.HolderableBase;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
+import java.util.List;
+import net.minecraft.util.random.Weighted;
+import net.minecraft.util.random.WeightedList;
+import net.minecraft.world.item.component.Compostable;
+import net.minecraft.world.item.component.CookingFuel;
+import net.minecraft.world.level.storage.loot.LootContext;
+import net.minecraft.world.level.storage.loot.LootParams;
+import net.minecraft.world.level.storage.loot.parameters.LootContextParamSets;
+import net.minecraft.world.level.storage.loot.providers.number.ints.ConstantValue;
+import net.minecraft.world.level.storage.loot.providers.number.ints.ContextIntProvider;
+import net.minecraft.world.level.storage.loot.providers.number.ints.NumberDispatcher;
+import net.minecraft.world.level.storage.loot.providers.number.ints.ResolvableInt;
+import net.minecraft.world.level.storage.loot.providers.number.ints.WeightedListValue;
 import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.Registries;
@@ -15,13 +28,6 @@ import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStackTemplate;
 import net.minecraft.world.item.component.ItemAttributeModifiers;
-import net.minecraft.world.item.component.CookingFuel;
-import net.minecraft.world.item.component.Compostable;
-import net.minecraft.world.level.storage.loot.LootContext;
-import net.minecraft.world.level.storage.loot.LootParams;
-import net.minecraft.world.level.storage.loot.parameters.LootContextParamSets;
-import net.minecraft.world.level.storage.loot.providers.number.ints.ContextIntProvider;
-import net.minecraft.world.level.storage.loot.providers.number.ints.ResolvableInt;
 import org.bukkit.Material;
 import org.bukkit.Registry;
 import org.bukkit.World;
@@ -170,17 +176,22 @@ public class CraftItemType<M extends ItemMeta> extends HolderableBase<Item> impl
             return 0;
         }
 
+        // Legacy API has no processing context; match Paper for registry-backed values.
+        if (cookingFuel.burnTime() instanceof ResolvableInt.Constant constant) {
+            return constant.value();
+        }
         if (cookingFuel.burnTime() instanceof ResolvableInt.Reference burnTime) {
-            if (CraftServer.INSTANCE.getServer() == null) {
+            if (CraftServer.INSTANCE == null) {
                 throw new IllegalArgumentException("Too early to call this method");
             }
+
             Holder.Reference<ContextIntProvider> provider = CraftServer.INSTANCE.getServer().reloadableRegistries().lookup().getOrThrow(burnTime.key());
-            LootContext fakeContext = new LootContext.Builder(new LootParams.Builder(null).create(LootContextParamSets.EMPTY))
-                .withOptionalRandomSeed(42L)
-                .create(java.util.Optional.empty());
+            LootContext fakeContext = new LootContext(new LootParams.Builder(null).create(LootContextParamSets.EMPTY),
+                    net.minecraft.util.RandomSource.create(42L),
+                    CraftServer.INSTANCE.getServer().reloadableRegistries().lookup());
             return provider.value().getInt(fakeContext);
         }
-        return cookingFuel.burnTime() instanceof ResolvableInt.Constant constant ? constant.value() : 0;
+        return 0;
     }
 
     @Override
@@ -190,9 +201,41 @@ public class CraftItemType<M extends ItemMeta> extends HolderableBase<Item> impl
 
     @Override
     public float getCompostChance() {
-        Preconditions.checkArgument(this.isCompostable(), "The item type " + this.getKey() + " is not compostable");
         Compostable compostable = this.getHandle().components().get(DataComponents.COMPOSTABLE);
-        return compostable.layers() instanceof ResolvableInt.Constant constant ? Math.min(1.0f, constant.value() / 7.0f) : 0.0f;
+        Preconditions.checkArgument(compostable != null, "The item type " + this.getKey() + " is not compostable");
+
+        // Legacy API has no processing context; match Paper for registry-backed values.
+        if (compostable.layers() instanceof ResolvableInt.Constant constant) {
+            return constant.value() > 0 ? 1.0F : 0.0F;
+        }
+        if (compostable.layers() instanceof ResolvableInt.Reference reference) {
+            if (CraftServer.INSTANCE == null) {
+                throw new IllegalArgumentException("Too early to call this method");
+            }
+
+            Holder.Reference<ContextIntProvider> provider = CraftServer.INSTANCE.getServer().reloadableRegistries().lookup().getOrThrow(reference.key());
+            ConstantValue oneLayerValue = new ConstantValue(1);
+            if (provider.value().equals(oneLayerValue)) {
+                return 1.0F;
+            }
+            if (provider.value() instanceof NumberDispatcher dispatcher) {
+                if (dispatcher.defaultValue().value() instanceof WeightedListValue(WeightedList<Holder<ContextIntProvider>> distribution)) {
+                    List<Weighted<Holder<ContextIntProvider>>> weightedList = distribution.unwrap();
+                    int total = 0;
+                    int current = 0;
+                    for (Weighted<Holder<ContextIntProvider>> weighted : weightedList) {
+                        total += weighted.weight();
+                        if (weighted.value().value().equals(oneLayerValue)) {
+                            current = weighted.weight();
+                        }
+                    }
+
+                    return (float) current / total;
+                }
+            }
+        }
+
+        return 0.0F;
     }
 
     @Override
@@ -248,7 +291,7 @@ public class CraftItemType<M extends ItemMeta> extends HolderableBase<Item> impl
 
     @Override
     public @Nullable Material asMaterial() {
-        return Registry.MATERIAL.get(this.getKey());
+        return CraftMagicNumbers.getMaterial(this.getHandle());
     }
 
     // Paper start - add Translatable

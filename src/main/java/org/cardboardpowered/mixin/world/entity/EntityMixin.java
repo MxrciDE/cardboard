@@ -36,6 +36,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.storage.ValueOutput;
+import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import org.bukkit.Bukkit;
@@ -67,6 +68,9 @@ public abstract class EntityMixin implements CommandSourceBridge, EntityBridge {
     public org.bukkit.projectiles.ProjectileSource projectileSource;
     private ArrayList<org.bukkit.inventory.ItemStack> drops = new ArrayList<org.bukkit.inventory.ItemStack>();
     private boolean forceDrops;
+    private org.bukkit.event.entity.EntityRemoveEvent.Cause cardboard$removeEventCause;
+    private boolean cardboard$generation;
+    private boolean cardboard$fixedPose;
 
     @Override
     public ArrayList<org.bukkit.inventory.ItemStack> cardboard_getDrops() {
@@ -91,6 +95,36 @@ public abstract class EntityMixin implements CommandSourceBridge, EntityBridge {
         this.forceDrops = forceDrops;
     }
 
+    @Override
+    public org.bukkit.event.entity.EntityRemoveEvent.Cause cardboard$getRemoveEventCause() {
+        return this.cardboard$removeEventCause;
+    }
+
+    @Override
+    public void cardboard$setRemoveEventCause(org.bukkit.event.entity.EntityRemoveEvent.Cause cause) {
+        this.cardboard$removeEventCause = cause;
+    }
+
+    @Override
+    public boolean cardboard$isGeneration() {
+        return this.cardboard$generation;
+    }
+
+    @Override
+    public void cardboard$setGeneration(boolean generation) {
+        this.cardboard$generation = generation;
+    }
+
+    @Override
+    public boolean cardboard$hasFixedPose() {
+        return this.cardboard$fixedPose;
+    }
+
+    @Override
+    public void cardboard$setFixedPose(boolean fixed) {
+        this.cardboard$fixedPose = fixed;
+    }
+
     @Shadow
     private Level level;
     
@@ -101,6 +135,9 @@ public abstract class EntityMixin implements CommandSourceBridge, EntityBridge {
 
     @Shadow
     private EntityDimensions dimensions;
+
+    @Shadow
+    private Entity.RemovalReason removalReason;
 
     public EntityMixin() {
     }
@@ -214,10 +251,16 @@ public abstract class EntityMixin implements CommandSourceBridge, EntityBridge {
 
     @Inject(at = @At("HEAD"), method = "setPose(Lnet/minecraft/world/entity/Pose;)V", cancellable = true)
     public void setPoseBF(net.minecraft.world.entity.Pose entitypose, CallbackInfo ci) {
+        if (this.cardboard$fixedPose) {
+            ci.cancel();
+            return;
+        }
         if (entitypose == ((Entity)(Object)this).getPose()) {
             ci.cancel();
             return;
         }
+        // No Bukkit server on the client; on a remote server Bukkit.server is null
+        if (((Entity)(Object)this).level().isClientSide()) return;
         Pose b = Pose.STANDING;
         switch (entitypose) {
             case CROUCHING:
@@ -252,6 +295,8 @@ public abstract class EntityMixin implements CommandSourceBridge, EntityBridge {
 
     @Inject(at = @At("HEAD"), method = "setAirSupply", cancellable = true)
     public void cardboard$setAir_EntityAirChangeEvent(int i, CallbackInfo ci) {
+        // Client entities are never valid, so leave their local air prediction to vanilla
+        if (this.level.isClientSide()) return;
         if (!valid) {
             ci.cancel();
             return;
@@ -308,6 +353,11 @@ public abstract class EntityMixin implements CommandSourceBridge, EntityBridge {
      */
     @Redirect(method = "lavaIgnite", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/entity/Entity;igniteForSeconds(F)V"))
     public void cardboard$mixinEntity_igniteByLava_EntityCombustByBlockEvent(Entity entity, float seconds) {
+        // Client entities have no Bukkit side; on a remote server CraftServer.console is null
+        if (this.level.isClientSide()) {
+            entity.igniteForSeconds(seconds);
+            return;
+        }
         if ((Object) this instanceof LivingEntity && ((Entity) (Object) this).remainingFireTicks <= 0) {
             org.bukkit.block.Block damager = null;
             org.bukkit.entity.Entity damagee = this.getBukkitEntity();
@@ -345,6 +395,20 @@ public abstract class EntityMixin implements CommandSourceBridge, EntityBridge {
     }
     */
 	
+    @Inject(method = "saveWithoutId", at = @At("TAIL"))
+    private void cardboard$savePersistentData(ValueOutput output, CallbackInfo ci) {
+        // Unused Bukkit wrappers must not be allocated for every saved native entity.
+        if (this.bukkitEntity != null) this.bukkitEntity.storeBukkitValues(output);
+    }
+
+    @Inject(method = "load", at = @At("TAIL"))
+    private void cardboard$loadPersistentData(ValueInput input, CallbackInfo ci) {
+        Entity self = (Entity) (Object) this;
+        if (!self.level().isClientSide() && CraftServer.INSTANCE != null && input.child("BukkitValues").isPresent()) {
+            this.getBukkitEntity().readBukkitValues(input);
+        }
+    }
+
 	/**
 	 * Save Bukkit WorldUUID
 	 * 
@@ -352,6 +416,8 @@ public abstract class EntityMixin implements CommandSourceBridge, EntityBridge {
 	 */
 	@Inject(method = "saveWithoutId", at = @At(value = "INVOKE", shift = At.Shift.AFTER, ordinal = 0, target = "Lnet/minecraft/world/level/storage/ValueOutput;store(Ljava/lang/String;Lcom/mojang/serialization/Codec;Ljava/lang/Object;)V"))
     public void cardboard$writeData_saveBukkitWorldUuid(ValueOutput output, CallbackInfo ci) {
+		// ClientLevel has no CraftWorld; the client saves entities for F3+I
+		if (this.level.isClientSide()) return;
 		output.putLong("WorldUUIDLeast", this.level.cardboard$getWorld().getUID().getLeastSignificantBits());
 		output.putLong("WorldUUIDMost", this.level.cardboard$getWorld().getUID().getMostSignificantBits());
     }
@@ -391,12 +457,55 @@ public abstract class EntityMixin implements CommandSourceBridge, EntityBridge {
     	((Entity) (Object) this).igniteForSeconds(seconds);
     }
     
-    public boolean saveAsPassenger(ValueOutput valueOutput, boolean includeAll, boolean includeNonSaveable, boolean forceSerialization) {
-    	return ((Entity) (Object) this).saveAsPassenger(valueOutput);
-    }
-    
-    public void saveWithoutId(ValueOutput valueOutput, boolean includeAll, boolean includeNonSaveable, boolean forceSerialization) {
-    	((Entity) (Object) this).saveWithoutId(valueOutput);
+    @Override
+    public boolean cardboard$saveAsPassenger(
+            ValueOutput output,
+            boolean includeNonSaveable,
+            boolean forceSerialization,
+            boolean includePassengers) {
+        if (this.removalReason != null && !this.removalReason.shouldSave() && !forceSerialization) {
+            return false;
+        }
+
+        final Entity self = (Entity) (Object) this;
+        if (!includeNonSaveable && !self.getType().canSerialize()) {
+            return false;
+        }
+
+        final net.minecraft.resources.Identifier id =
+                net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(self.getType());
+        if (id == null) {
+            return false;
+        }
+
+        output.putString("id", id.toString());
+
+        // Let vanilla serialize the entity, then replace its passenger tree with a
+        // Cardboard-controlled one so PLAYER/MISC/FORCE apply recursively without
+        // mutating the live entity relationship.
+        final java.util.List<Entity> originalPassengers = self.getPassengers();
+        self.saveWithoutId(output);
+        output.discard("Passengers");
+
+        if (includePassengers && !originalPassengers.isEmpty()) {
+            ValueOutput.ValueOutputList passengerOutputs = output.childrenList("Passengers");
+            for (Entity passenger : originalPassengers) {
+                ValueOutput passengerOutput = passengerOutputs.addChild();
+                if (!((EntityBridge) (Object) passenger)
+                        .cardboard$saveAsPassenger(
+                                passengerOutput,
+                                includeNonSaveable,
+                                forceSerialization,
+                                true)) {
+                    passengerOutputs.discardLast();
+                }
+            }
+            if (passengerOutputs.isEmpty()) {
+                output.discard("Passengers");
+            }
+        }
+
+        return true;
     }
     
     private final CommandSource commandSource = new CommandSource() {
@@ -426,4 +535,14 @@ public abstract class EntityMixin implements CommandSourceBridge, EntityBridge {
         }
     };
     
+
+    @Inject(method = "isAlliedTo(Lnet/minecraft/world/entity/Entity;)Z", at = @At("RETURN"), cancellable = true)
+    private void cardboard$additionalAlliedRules(Entity other, CallbackInfoReturnable<Boolean> cir) {
+        if (!cir.getReturnValueZ()) {
+            org.bukkit.craftbukkit.entity.CraftEntity bukkit = this.getBukkitEntityRaw();
+            if (bukkit != null && !bukkit.getAdditionalAlliedRules().isEmpty()) {
+                cir.setReturnValue(bukkit.considersEntityAsAlly0(((EntityBridge) other).getBukkitEntity()));
+            }
+        }
+    }
 }

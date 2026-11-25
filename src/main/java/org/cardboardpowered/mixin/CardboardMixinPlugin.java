@@ -1,7 +1,6 @@
 package org.cardboardpowered.mixin;
 
 import java.io.File;
-import java.lang.annotation.Annotation;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLClassLoader;
@@ -11,11 +10,13 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.cardboardpowered.CardboardConfig;
 import org.cardboardpowered.asm.MixinProcessor;
+import org.cardboardpowered.asm.PaperPlayerInfoUpdatePacketProcessor;
 import org.cardboardpowered.asm.TransformAccessProcessor;
 import org.cardboardpowered.library.Libraries;
 import org.cardboardpowered.library.Library;
 import org.cardboardpowered.library.LibraryManager;
 import org.cardboardpowered.util.JarReader;
+import org.cardboardpowered.util.MixinInfo;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.FieldInsnNode;
@@ -135,13 +136,12 @@ public class CardboardMixinPlugin implements IMixinConfigPlugin, IEnvironmentTok
             }
 
             Class<?> c = Class.forName(mixinClassName, false, ucl);
+            MixinInfo info = c.getAnnotation(MixinInfo.class);
 
-            for (Annotation a : c.getAnnotations()) {
-                String e = a.toString().split("events=")[1].substring(1);
-                e = e.substring(0, e.lastIndexOf("}")).replace("\"", "");
-                String[] events = e.split(", ");
+            if (info != null) {
+                String[] events = info.events();
                 if (events.length > 0) {
-                	// System.out.println("EVENTS: " + e);
+                	// System.out.println("EVENTS: " + String.join(", ", events));
 
                     if (events[0].length() < 4) {
                         return true; // No events
@@ -225,7 +225,8 @@ public class CardboardMixinPlugin implements IMixinConfigPlugin, IEnvironmentTok
     }
 
     private final List<MixinProcessor> postProcessors = List.of(
-            new TransformAccessProcessor()
+            new TransformAccessProcessor(),
+            new PaperPlayerInfoUpdatePacketProcessor()
     );
 
     

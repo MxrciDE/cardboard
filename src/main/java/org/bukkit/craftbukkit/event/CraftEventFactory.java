@@ -166,7 +166,7 @@ public class CraftEventFactory {
     }
 
     public static ServerListPingEvent callServerListPingEvent(Server craftServer, InetAddress address, String motd, int numPlayers, int maxPlayers) {
-    	ServerListPingEvent event =  new ServerListPingEvent(address, net.kyori.adventure.text.Component.text(motd), numPlayers, maxPlayers);
+        ServerListPingEvent event =  new ServerListPingEvent("", new java.net.InetSocketAddress(address, 0), motd, numPlayers, maxPlayers);
         craftServer.getPluginManager().callEvent(event);
         return event;
     }

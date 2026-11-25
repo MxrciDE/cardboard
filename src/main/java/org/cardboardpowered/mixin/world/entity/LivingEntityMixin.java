@@ -1,5 +1,6 @@
 package org.cardboardpowered.mixin.world.entity;
 
+import com.llamalad7.mixinextras.sugar.Local;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.item.ItemEntity;
 import org.bukkit.craftbukkit.CraftServer;
@@ -11,8 +12,11 @@ import org.bukkit.Bukkit;
 import org.bukkit.craftbukkit.attribute.CraftAttributeMap;
 import org.bukkit.craftbukkit.inventory.CraftItemStack;
 import org.bukkit.entity.Player;
+import org.bukkit.event.entity.EntityDamageByEntityEvent;
+import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityPotionEffectEvent;
 import org.bukkit.event.entity.EntityRegainHealthEvent;
+import org.bukkit.event.entity.EntityToggleGlideEvent;
 import org.bukkit.event.player.PlayerItemConsumeEvent;
 import org.bukkit.craftbukkit.entity.CraftPlayer;
 import org.jspecify.annotations.Nullable;
@@ -22,6 +26,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import java.util.ArrayList;
 import net.minecraft.server.level.ServerLevel;
@@ -31,14 +36,26 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.HumanoidArm;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.attributes.AttributeMap;
+import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.gamerules.GameRules;
 
 @Mixin(LivingEntity.class)
+@SuppressWarnings({"deprecation", "removal"})
 public abstract class LivingEntityMixin extends EntityMixin implements LivingEntityBridge {
 
+    @Override
+    @org.spongepowered.asm.mixin.gen.Accessor("damageCooldownTime")
+    public abstract int cardboard$getDamageCooldownTime();
+
+    @Override
+    @org.spongepowered.asm.mixin.gen.Accessor("damageCooldownTime")
+    public abstract void cardboard$setDamageCooldownTime(int ticks);
+
     private transient EntityPotionEffectEvent.Cause bukkitCause;
+    private boolean cardboard$bukkitPickUpLoot = true;
+
     private LivingEntity get() {
         return (LivingEntity)(Object)this;
     }
@@ -57,6 +74,76 @@ public abstract class LivingEntityMixin extends EntityMixin implements LivingEnt
             this.craftAttributes = new CraftAttributeMap( get().getAttributes() ); // new CardboardAttributable(this.attributes);
         }
         return craftAttributes;
+    }
+
+    @Override
+    public boolean cardboard$getBukkitPickUpLoot() {
+        return this.cardboard$bukkitPickUpLoot;
+    }
+
+    @Override
+    public void cardboard$setBukkitPickUpLoot(boolean pickup) {
+        this.cardboard$bukkitPickUpLoot = pickup;
+    }
+
+    /**
+     * Fire Bukkit's damage event before LivingEntity mutates health, armor,
+     * invulnerability timers or knockback state. This intentionally keeps the
+     * first parity pass small: cancellation is authoritative, and the common
+     * entity/projectile damager forms are represented by
+     * EntityDamageByEntityEvent (which also reaches EntityDamageEvent
+     * listeners through the inherited handler list).
+     */
+    @Inject(method = "hurtServer", at = @At("HEAD"), cancellable = true)
+    private void cardboard$entityDamageEvent(ServerLevel level, DamageSource source, float amount, CallbackInfoReturnable<Boolean> cir) {
+        // The void-specific wrapper emits one VOID event and applies its edited amount.
+        if (source.is(net.minecraft.world.damagesource.DamageTypes.FELL_OUT_OF_WORLD)) return;
+        org.bukkit.entity.Entity damagee = this.getBukkitEntity();
+        Entity direct = source.getDirectEntity();
+        Entity causing = source.getEntity();
+
+        EntityDamageEvent.DamageCause cause;
+        if (direct instanceof Projectile) {
+            cause = EntityDamageEvent.DamageCause.PROJECTILE;
+        } else if (causing != null) {
+            cause = EntityDamageEvent.DamageCause.ENTITY_ATTACK;
+        } else {
+            cause = EntityDamageEvent.DamageCause.CUSTOM;
+        }
+
+        EntityDamageEvent event;
+        Entity damager = direct != null ? direct : causing;
+        if (damager != null) {
+            event = new EntityDamageByEntityEvent(
+                    ((EntityBridge) damager).getBukkitEntity(),
+                    damagee,
+                    cause,
+                    amount
+            );
+        } else {
+            event = new EntityDamageEvent(damagee, cause, amount);
+        }
+
+        Bukkit.getPluginManager().callEvent(event);
+        if (event.isCancelled()) {
+            cir.setReturnValue(false);
+        }
+    }
+
+    @Inject(method = "stopFallFlying", at = @At("HEAD"), cancellable = true)
+    private void cardboard$toggleGlideStop(CallbackInfo ci) {
+        if (!this.get().isFallFlying()) {
+            return;
+        }
+
+        EntityToggleGlideEvent event = new EntityToggleGlideEvent(
+                (org.bukkit.entity.LivingEntity) this.getBukkitEntity(),
+                false
+        );
+        Bukkit.getPluginManager().callEvent(event);
+        if (event.isCancelled()) {
+            ci.cancel();
+        }
     }
 
     @Redirect(at = @At(value = "INVOKE", target = "Lnet/minecraft/world/item/ItemStack;finishUsingItem(Lnet/minecraft/world/level/Level;Lnet/minecraft/world/entity/LivingEntity;)Lnet/minecraft/world/item/ItemStack;"), 
@@ -98,7 +185,9 @@ public abstract class LivingEntityMixin extends EntityMixin implements LivingEnt
 
         boolean flag = get().lastHurtByPlayerMemoryTime > 0;
         this.dropEquipment(world);
-        if (!get().isBaby() && world.getGameRules().get(GameRules.MOB_DROPS)) {
+        // Ask the entity itself: LivingEntity's own answer excludes babies, but Monster overrides
+        // that away, so inlining the base check silently drops all loot from every baby hostile.
+        if (this.shouldDropLoot(world)) {
             this.dropFromLootTable(world, damagesource, flag);
             this.dropCustomDeathLoot((ServerLevel) world, damagesource, flag);
         }
@@ -150,6 +239,9 @@ public abstract class LivingEntityMixin extends EntityMixin implements LivingEnt
     }
 
     @Shadow
+    protected abstract boolean shouldDropLoot(ServerLevel world);
+
+    @Shadow
     public void dropFromLootTable(ServerLevel world, DamageSource damagesource, boolean flag) {
     }
 
@@ -171,7 +263,7 @@ public abstract class LivingEntityMixin extends EntityMixin implements LivingEnt
     protected abstract ItemEntity createItemStackToDrop(ItemStack itemStack, boolean bl, boolean bl2);
 
     @Shadow
-    public abstract void swing(InteractionHand interactionHand);
+    public abstract boolean swing(InteractionHand interactionHand, net.minecraft.world.item.component.SwingAnimation animation, boolean reset);
 
     @Shadow
     public ItemStack useItem;
@@ -185,14 +277,22 @@ public abstract class LivingEntityMixin extends EntityMixin implements LivingEnt
     /**
      * @reason Bukkit RegainHealthEvent
      */
-    @Inject(at = @At("HEAD"), method = "heal", cancellable = true)
+    @Inject(at = @At("HEAD"), method = "heal(F)V", cancellable = true)
     public void doRegainHealthEvent(float f, CallbackInfo ci) {
+        if (this.level().isClientSide()) {
+            return;
+        }
         heal(f, EntityRegainHealthEvent.RegainReason.CUSTOM);
         ci.cancel();
         return;
     }
 
     public void heal(float f, EntityRegainHealthEvent.RegainReason regainReason) {
+        if (this.level().isClientSide()) {
+            // The vanilla injection above lets client-side healing run without Bukkit.
+            get().heal(f);
+            return;
+        }
         if (get().getHealth() > 0.0F) {
             EntityRegainHealthEvent event = new EntityRegainHealthEvent(this.getBukkitEntity(), f, regainReason);
             if (this.isValidBF()) {
@@ -200,6 +300,40 @@ public abstract class LivingEntityMixin extends EntityMixin implements LivingEnt
                 if (!event.isCancelled()) get().setHealth((float) (get().getHealth() + event.getAmount()));
             }
         }
+    }
+
+    @Inject(method = "drop", at = @At(value = "INVOKE",
+            target = "Lnet/minecraft/world/level/Level;addFreshEntity(Lnet/minecraft/world/entity/Entity;)Z"),
+            cancellable = true)
+    private void cardboard$playerDropItemEvent(ItemStack stack, boolean thrownFromHand,
+            net.minecraft.util.Prediction prediction, CallbackInfoReturnable<ItemEntity> cir,
+            @Local ItemEntity itemEntity) {
+        if (get() instanceof ServerPlayer && !this.cardboard$allowPlayerDrop(itemEntity, thrownFromHand)) {
+            cir.setReturnValue(null);
+        }
+    }
+
+    private boolean cardboard$allowPlayerDrop(ItemEntity itemEntity, boolean thrownFromHand) {
+        if (!(this.getBukkitEntity() instanceof Player player)) {
+            return true;
+        }
+        org.bukkit.entity.Item drop = (org.bukkit.entity.Item) ((EntityBridge) itemEntity).getBukkitEntity();
+        org.bukkit.event.player.PlayerDropItemEvent event = new org.bukkit.event.player.PlayerDropItemEvent(player, drop);
+        CraftServer.INSTANCE.getPluginManager().callEvent(event);
+        if (!event.isCancelled()) {
+            return true;
+        }
+        org.bukkit.inventory.ItemStack inHandItem = player.getInventory().getItemInMainHand();
+        if (thrownFromHand && inHandItem.getAmount() == 0) {
+            player.getInventory().setItemInMainHand(drop.getItemStack());
+        } else if (thrownFromHand && inHandItem.isSimilar(drop.getItemStack())
+                && inHandItem.getAmount() < inHandItem.getMaxStackSize() && drop.getItemStack().getAmount() == 1) {
+            inHandItem.setAmount(inHandItem.getAmount() + 1);
+            player.getInventory().setItemInMainHand(inHandItem);
+        } else {
+            player.getInventory().addItem(drop.getItemStack());
+        }
+        return false;
     }
 
     // Paper start - Extend dropItem API
@@ -214,34 +348,17 @@ public abstract class LivingEntityMixin extends EntityMixin implements LivingEnt
         if (stack.isEmpty()) {
             return null;
         } else if (this.level().isClientSide()) {
-            this.swing(InteractionHand.MAIN_HAND);
+            this.swing(InteractionHand.MAIN_HAND, get().getItemInHand(InteractionHand.MAIN_HAND).getOrDefault(
+                    net.minecraft.core.component.DataComponents.ATTACK_ANIMATION,
+                    net.minecraft.world.item.component.SwingAnimation.DEFAULT), true);
             return null;
         } else {
             ItemEntity itemEntity = this.createItemStackToDrop(stack, randomizeMotion, includeThrower);
             if (itemEntity != null) {
                 // CraftBukkit start - fire PlayerDropItemEvent
                 if (entityOperation != null) entityOperation.accept((org.bukkit.entity.Item)((EntityBridge)itemEntity).getBukkitEntity());
-                if (callEvent && this.getBukkitEntity() instanceof org.bukkit.entity.Player player) {
-                    org.bukkit.entity.Item drop = (org.bukkit.entity.Item)((EntityBridge)itemEntity).getBukkitEntity();
-
-                    org.bukkit.event.player.PlayerDropItemEvent event = new org.bukkit.event.player.PlayerDropItemEvent(player, drop);
-                    CraftServer.INSTANCE.getPluginManager().callEvent(event);
-
-                    if (event.isCancelled()) {
-                        org.bukkit.inventory.ItemStack inHandItem = player.getInventory().getItemInMainHand();
-                        if (includeThrower && inHandItem.getAmount() == 0) {
-                            // The complete stack was dropped
-                            player.getInventory().setItemInMainHand(drop.getItemStack());
-                        } else if (includeThrower && inHandItem.isSimilar(drop.getItemStack()) && inHandItem.getAmount() < inHandItem.getMaxStackSize() && drop.getItemStack().getAmount() == 1) {
-                            // Only one item is dropped
-                            inHandItem.setAmount(inHandItem.getAmount() + 1);
-                            player.getInventory().setItemInMainHand(inHandItem);
-                        } else {
-                            // Fallback
-                            player.getInventory().addItem(drop.getItemStack());
-                        }
-                        return null;
-                    }
+                if (callEvent && !this.cardboard$allowPlayerDrop(itemEntity, includeThrower)) {
+                    return null;
                 }
                 // CraftBukkit end
                 this.level().addFreshEntity(itemEntity);

@@ -12,7 +12,7 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * Lesser General Public License for more details.
  * 
- * You should have received a copy of the GNU General Public License
+ * You should have received a copy of the GNU Lesser General Public License
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
@@ -26,7 +26,6 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.PlaceOnWaterBlockItem;
 import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
@@ -53,48 +52,46 @@ public class BlockItemMixin implements BlockItemBridge {
     // @Shadow public BlockState placeFromTag(BlockPos blockposition, World world, ItemStack itemstack, BlockState iblockdata) {return null;}
     @Shadow public BlockPlaceContext updatePlacementContext(BlockPlaceContext blockactioncontext) {return null;}
     @Shadow public boolean placeBlock(BlockPlaceContext blockactioncontext, BlockState iblockdata) {return false;}
-    @Shadow public boolean updateCustomBlockEntityTag(BlockPos blockposition, Level world, Player entityhuman, ItemStack itemstack, BlockState iblockdata) {return false;}
     @Shadow protected boolean mustSurvive() {return false;}
 
     private org.bukkit.block.BlockState bukkit_state;
 
-    
-    //@Shadow
-    //public static BlockState with( BlockState state, Property property, String name) {
-    //	return null; // Shadow method
-    //}
-   //  Lnet/minecraft/item/BlockItem;with(Lnet/minecraft/block/BlockState;Lnet/minecraft/state/property/Property;Ljava/lang/String;)Lnet/minecraft/block/BlockState;
-    
     /**
-     * @author Cardboard
-     * @reason Fix LilyPad BlockState
+     * Capture the state being replaced before BlockItem mutates the world. The
+     * old implementation only captured PlaceOnWaterBlockItem, which meant
+     * ordinary BlockItem placement could never reach BlockPlaceEvent.
      */
-    @Inject(at = @At(value = "INVOKE_ASSIGN", target = 
-            "Lnet/minecraft/world/item/BlockItem;getPlacementState(Lnet/minecraft/world/item/context/BlockPlaceContext;)Lnet/minecraft/world/level/block/state/BlockState;"), 
+    @Inject(at = @At(value = "INVOKE_ASSIGN", target =
+            "Lnet/minecraft/world/item/BlockItem;getPlacementState(Lnet/minecraft/world/item/context/BlockPlaceContext;)Lnet/minecraft/world/level/block/state/BlockState;"),
             method = "place(Lnet/minecraft/world/item/context/BlockPlaceContext;)Lnet/minecraft/world/InteractionResult;")
-    public void bukkitWaterlilyPlacementFix(BlockPlaceContext context, CallbackInfoReturnable<InteractionResult> ci) {
-        bukkit_state = null;
-        if (((BlockItem)(Object)this) instanceof PlaceOnWaterBlockItem)
-            bukkit_state = org.bukkit.craftbukkit.block.CraftBlockStates.getBlockState(context.getLevel(), context.getClickedPos());
+    public void cardboard$captureReplacedBlockState(BlockPlaceContext context, CallbackInfoReturnable<InteractionResult> ci) {
+        if (context.getLevel().isClientSide()) return;
+        bukkit_state = org.bukkit.craftbukkit.block.CraftBlockStates.getBlockState(context.getLevel(), context.getClickedPos());
     }
 
     /**
-     * @reason BlockPlaceEvent for LilyPad
+     * Fire BlockPlaceEvent before BlockItem consumes the stack / finishes the
+     * action. On cancellation restore the captured state and fail the vanilla
+     * placement so the plugin's cancellation is authoritative.
      */
     @Inject(at = @At(value = "INVOKE_ASSIGN", target =
-            "Lnet/minecraft/world/item/BlockItem;updateCustomBlockEntityTag(Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/Level;Lnet/minecraft/world/entity/player/Player;Lnet/minecraft/world/item/ItemStack;Lnet/minecraft/world/level/block/state/BlockState;)Z"),
+            "Lnet/minecraft/world/item/BlockItem;updateCustomBlockEntityTag(Lnet/minecraft/world/level/Level;Lnet/minecraft/world/entity/player/Player;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/item/ItemStack;)Z"),
             method = "place(Lnet/minecraft/world/item/context/BlockPlaceContext;)Lnet/minecraft/world/InteractionResult;", cancellable = true)
-    public void doBukkitEvent_DoBlockPlaceEventForWaterlilies(BlockPlaceContext context, CallbackInfoReturnable<InteractionResult> ci) {
-        if (bukkit_state != null) {
-            BlockPos pos = context.getClickedPos();
-            Level world = context.getLevel();
-            Player entityhuman = context.getPlayer();
+    public void cardboard$blockPlaceEvent(BlockPlaceContext context, CallbackInfoReturnable<InteractionResult> ci) {
+        if (bukkit_state == null || !(context.getLevel() instanceof ServerLevel world) || context.getPlayer() == null) {
+            return;
+        }
 
-            BlockPlaceEvent placeEvent = CraftEventFactory.callBlockPlaceEvent((ServerLevel) world, entityhuman, context.getHand(), bukkit_state, pos);
-            if (placeEvent.isCancelled() || !placeEvent.canBuild()) {
-                bukkit_state.update(true, false);
-                ci.setReturnValue(InteractionResult.FAIL);
+        BlockPos pos = context.getClickedPos();
+        BlockPlaceEvent placeEvent = CraftEventFactory.callBlockPlaceEvent(world, context.getPlayer(), context.getHand(), bukkit_state, pos);
+        bukkit_state = null;
+
+        if (placeEvent.isCancelled() || !placeEvent.canBuild()) {
+            placeEvent.getBlockReplacedState().update(true, false);
+            if (context.getPlayer() instanceof ServerPlayer serverPlayer) {
+                serverPlayer.containerMenu.sendAllDataToRemote();
             }
+            ci.setReturnValue(InteractionResult.FAIL);
         }
     }
 
@@ -103,6 +100,7 @@ public class BlockItemMixin implements BlockItemBridge {
      */
     @Inject(at = @At("RETURN"), method = "canPlace(Lnet/minecraft/world/item/context/BlockPlaceContext;Lnet/minecraft/world/level/block/state/BlockState;)Z", cancellable = true)
     public void doBukkitEvent_BlockCanBuildEvent(BlockPlaceContext blockactioncontext, BlockState iblockdata, CallbackInfoReturnable<Boolean> ci) {
+        if (blockactioncontext.getLevel().isClientSide()) return;
         Player entityhuman = blockactioncontext.getPlayer();
         CollisionContext voxelshapecollision = entityhuman == null ? CollisionContext.empty() : CollisionContext.of((Entity) entityhuman);
 
