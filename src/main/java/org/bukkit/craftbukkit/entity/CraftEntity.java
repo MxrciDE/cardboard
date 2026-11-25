@@ -45,8 +45,10 @@ import org.bukkit.Sound;
 import org.bukkit.World;
 import org.bukkit.block.BlockFace;
 import org.bukkit.block.PistonMoveReaction;
+import org.bukkit.damage.DamageSource;
 import org.bukkit.craftbukkit.CraftServer;
 import org.bukkit.craftbukkit.CraftSound;
+import org.bukkit.craftbukkit.damage.CraftDamageSource;
 import org.bukkit.craftbukkit.block.CraftBlock;
 import org.bukkit.craftbukkit.persistence.CraftPersistentDataContainer;
 import org.bukkit.craftbukkit.persistence.CraftPersistentDataTypeRegistry;
@@ -924,7 +926,13 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
 
     @Override
     public boolean isMarkedInvulnerable() {
-        return this.getHandle().isInvulnerableToBase(this.getHandle().damageSources().generic());
+        return this.getHandle().isInvulnerable();
+    }
+
+    @Override
+    public boolean isInvulnerableTo(final @NotNull DamageSource source) {
+        Preconditions.checkArgument(source != null, "DamageSource cannot be null");
+        return this.getHandle().isInvulnerableToBase(((CraftDamageSource) source).getHandle());
     }
 
     @Override
