@@ -62,6 +62,11 @@ public class CraftSulfurCube extends CraftAgeable implements SulfurCube {
         return this.getHandle().primeTime(force);
     }
 
+    @Override
+    public boolean swallow(org.bukkit.inventory.ItemStack itemStack) {
+        return this.getHandle().equipItem(CraftItemStack.asNMSCopy(itemStack));
+    }
+
     // --- Shearable ---
 
     @Override
