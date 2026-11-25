@@ -82,7 +82,7 @@ jobs:
 
           start = "    @Override\n    public @org.jetbrains.annotations.Nullable io.papermc.paper.world.WorldClock getDefaultClock()"
           end = "    @Override\n    public io.papermc.paper.world.chunk.ChunkGenerationState getChunkGenerationState(int x, int z)"
-          insertion = "    @Override\n    public void setFullTime(long time)"
+          insertion = "    public void setFullTime(long time)"
           if start not in original or end not in original:
               raise SystemExit("Could not locate the preserved Paper WorldClock implementation")
           if "getDefaultClock()" not in current:
