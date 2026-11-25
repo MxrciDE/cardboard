@@ -925,6 +925,17 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
     }
 
     @Override
+    public int getInvulnerableTime() {
+        return this.getHandle().getInvulnerableTime();
+    }
+
+    @Override
+    public void setInvulnerableTime(final int ticks) {
+        Preconditions.checkArgument(ticks >= 0, "ticks cannot be negative");
+        this.getHandle().setInvulnerableTime(ticks);
+    }
+
+    @Override
     public boolean isMarkedInvulnerable() {
         return this.getHandle().isInvulnerable();
     }
