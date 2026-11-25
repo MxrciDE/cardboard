@@ -20,7 +20,7 @@ public final class PaperRegistrySets {
         if (registryKeySet instanceof NamedRegistryKeySetImpl<A, ?>) {
             return ((NamedRegistryKeySetImpl<A, M>) registryKeySet).namedSet();
         } else {
-            final RegistryOps.RegistryInfo<M> registryInfo = lookup.lookup(resourceKey).orElseThrow();
+            final var registryInfo = lookup.lookup(resourceKey).orElseThrow();
             return HolderSet.direct(key -> {
                 return registryInfo.getter().getOrThrow(PaperRegistries.toNms(key));
             }, registryKeySet.values());
