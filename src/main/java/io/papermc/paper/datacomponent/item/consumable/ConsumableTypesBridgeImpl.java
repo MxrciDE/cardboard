@@ -58,7 +58,7 @@ public class ConsumableTypesBridgeImpl implements ConsumableTypesBridge {
     public ConsumeEffect.TeleportRandomly teleportRandomlyEffect(final float diameter) {
         Preconditions.checkArgument(diameter > 0, "diameter must be positive, was %s", diameter);
         return new PaperTeleportRandomly(
-            new net.minecraft.world.item.consume_effects.TeleportRandomlyConsumeEffect(diameter)
+            new net.minecraft.world.item.consume_effects.TeleportRandomlyConsumeEffect(diameter, false)
         );
     }
 }
