@@ -1782,7 +1782,7 @@ public class CraftServer extends CardboardAbstractServer implements Server {
             return null;
         }
         final org.bukkit.Location structureLocation = searchResult.getLocation();
-        final net.minecraft.core.BlockPos structurePos = org.bukkit.craftbukkit.util.CraftLocation.toBlockPos(structureLocation);
+        final net.minecraft.core.BlockPos structurePos = new net.minecraft.core.BlockPos(structureLocation.getBlockX(), structureLocation.getBlockY(), structureLocation.getBlockZ());
         final net.minecraft.world.item.ItemStack stack = net.minecraft.world.item.MapItem.create(
             level, structurePos.getX(), structurePos.getZ(), org.bukkit.map.MapView.Scale.NORMAL.getValue(), true, true
         );
