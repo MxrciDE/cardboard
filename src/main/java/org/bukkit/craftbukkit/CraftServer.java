@@ -2493,15 +2493,6 @@ public class CraftServer extends CardboardAbstractServer implements Server {
     	return true;
     }
 
-	@Override
-	public @Nullable ItemStack createExplorerMap(@NotNull World world, @NotNull Location location,
-			org.bukkit.generator.structure.@NotNull StructureType structureType,
-			org.bukkit.map.MapCursor.@NotNull Type mapIcon, int radius, boolean findUnexplored) {
-		// TODO Auto-generated method stub
-		return null;
-	}
-
-
     @Override
     public @Nullable ItemStack createExplorerMap(@NotNull World world, @NotNull Location location,
             org.bukkit.generator.structure.@NotNull StructureType structureType,
@@ -2517,7 +2508,7 @@ public class CraftServer extends CardboardAbstractServer implements Server {
             return null;
         }
         final Location structureLocation = searchResult.getLocation();
-        final BlockPos structurePos = CraftLocation.toBlockPos(structureLocation);
+        final BlockPos structurePos = new BlockPos(structureLocation.getBlockX(), structureLocation.getBlockY(), structureLocation.getBlockZ());
         final net.minecraft.world.item.ItemStack stack = MapItem.create(
             level, structurePos.getX(), structurePos.getZ(), org.bukkit.map.MapView.Scale.NORMAL.getValue(), true, true
         );
