@@ -9,12 +9,7 @@ pluginManagement {
     }
 }
 
-// Auto-provision the JDK 25 toolchain this build requires (build.gradle pins
-// languageVersion 25). Without this, Gradle fails on machines that only have a
-// different JDK installed instead of downloading a matching one.
-plugins {
-    id 'org.gradle.toolchains.foojay-resolver-convention' version '1.0.0'
-}
+// CI and local builds provision JDK 25 explicitly; no Foojay resolver is needed.
 
 rootProject.name = 'cardboard'
 
