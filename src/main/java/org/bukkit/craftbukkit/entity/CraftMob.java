@@ -22,6 +22,11 @@ public abstract class CraftMob extends CraftLivingEntity implements Mob, io.pape
     }
 
     @Override
+    public void setPersistenceRequired(boolean persistent) {
+        ((org.cardboardpowered.bridge.world.entity.MobBridge) this.getHandle()).cardboard$setPersistenceRequired(persistent);
+    }
+
+    @Override
     public net.minecraft.world.entity.Mob getHandle() {
         return (net.minecraft.world.entity.Mob) this.entity;
     }
